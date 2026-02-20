@@ -54,7 +54,6 @@ MapOptimization::MapOptimization(std::string name,
   current_ground_size_ = 0;
 
   pub_key_pose_arr_ = this->create_publisher<geometry_msgs::msg::PoseArray>("key_poses", 1);
-  pub_key_pose_6d_ = this->create_publisher<geometry_msgs::msg::PoseArray>("key_poses_6d", 1);
 
   pub_pose_graph_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("pose_graph", rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
 
@@ -153,9 +152,8 @@ MapOptimization::MapOptimization(std::string name,
   srvGetKeyFrameCloud = this->create_service<dddmr_sys_core::srv::GetKeyFrameCloud>("get_key_frame_cloud", std::bind(&MapOptimization::getKeyFrameCloud, this, std::placeholders::_1, std::placeholders::_2), rmw_qos_profile_services_default, get_key_frame_srv_cb_group_);
 
   timer_run_ = this->create_wall_timer(1ms, std::bind(&MapOptimization::run, this), timer_run_cb_group_);
-  //timer_pub_gbl_map_ = this->create_wall_timer(500ms, std::bind(&MapOptimization::publishGlobalMapThread, this), timer_pub_gbl_map_cb_group_);
   timer_loop_closure_ = this->create_wall_timer(1000ms, std::bind(&MapOptimization::loopClosureThread, this), timer_loop_closure_cb_group_);
-  timer_ground_edge_detection_ = this->create_wall_timer(200ms, std::bind(&MapOptimization::groundEdgeDetectionThread, this), timer_pub_gbl_map_cb_group_);
+  //timer_ground_edge_detection_ = this->create_wall_timer(200ms, std::bind(&MapOptimization::groundEdgeDetectionThread, this), timer_pub_gbl_map_cb_group_);
 
 }
 
@@ -176,7 +174,7 @@ void MapOptimization::getKeyFrameCloud(const std::shared_ptr<dddmr_sys_core::srv
   if(request->key_frame_number>=patchedGroundKeyFrames.size())
     return;
 
-  if(request->key_frame_number>=patchedGroundEdgeProcessedKeyFrames.size())
+  if(request->key_frame_number>=patchedGroundEdgeKeyFrames.size())
     return;
 
   if(request->key_frame_number>=cloudKeyPoses6D->size())
@@ -186,7 +184,7 @@ void MapOptimization::getKeyFrameCloud(const std::shared_ptr<dddmr_sys_core::srv
   
   pcl::toROSMsg(*keyFrameBaseLink, response->key_frame_cloud);
   pcl::toROSMsg(*patchedGroundKeyFrames[request->key_frame_number], response->key_frame_ground);
-  pcl::toROSMsg(*patchedGroundEdgeProcessedKeyFrames[request->key_frame_number], response->key_frame_ground_edge);
+  pcl::toROSMsg(*patchedGroundEdgeKeyFrames[request->key_frame_number], response->key_frame_ground_edge);
 
 }
 
@@ -424,14 +422,6 @@ void MapOptimization::allocateMemory() {
 
   latestFrameID = 0;
 }
-
-
-void MapOptimization::publishGlobalMapThread()
-{
-  copyPosesAndFrames();
-  publishGlobalMap();
-}
-
 
 void MapOptimization::loopClosureThread()
 {
@@ -744,7 +734,6 @@ void MapOptimization::publishKeyPosesAndFrames() {
   pubB2S->publish(trans_b2s_);
 
   geometry_msgs::msg::PoseArray pose_array;
-  geometry_msgs::msg::PoseArray pose_array_6d;
   for(auto it = cloudKeyPoses6D->points.begin(); it!=cloudKeyPoses6D->points.end(); it++){
     tf2::Transform tf2_trans_ci2c;
     tf2::Quaternion q;
@@ -769,24 +758,11 @@ void MapOptimization::publishKeyPosesAndFrames() {
     a_pose.orientation.z = tf2_trans_m2b.getRotation().z();
     a_pose.orientation.w = tf2_trans_m2b.getRotation().w();
     pose_array.poses.push_back(a_pose);
-
-    geometry_msgs::msg::Pose a_pose_6d;
-    a_pose.position.x = (*it).x;
-    a_pose.position.y = (*it).y;
-    a_pose.position.z = (*it).z;
-    a_pose.orientation.x = (*it).roll;
-    a_pose.orientation.y = (*it).pitch;
-    a_pose.orientation.z = (*it).yaw;
-    a_pose.orientation.w = 0.0;  
-    pose_array_6d.poses.push_back(a_pose_6d);
   }
   pose_array.header.frame_id = "map";
   pose_array.header.stamp = clock_->now();
   pub_key_pose_arr_->publish(pose_array);
 
-  pose_array.header.frame_id = "map";
-  pose_array.header.stamp = clock_->now();
-  pub_key_pose_6d_->publish(pose_array_6d);
 
   //@visualize edge
   visualization_msgs::msg::MarkerArray markerArray;
@@ -845,112 +821,6 @@ void MapOptimization::publishKeyPosesAndFrames() {
   cloud_msg_pose_6d.header.frame_id = "map";
   pubcloudKeyPoses6D->publish(cloud_msg_pose_6d);
   
-}
-
-void MapOptimization::copyPosesAndFrames(){
-  
-  if (cloudKeyPoses3D->points.empty() == true) return;
-
-  // mutex lock for copy only, so we will not be delay by global map visualization
-  std::lock_guard<std::mutex> lock(mtx);
-
-  cloudKeyPoses6D_Copy.reset(new pcl::PointCloud<PointTypePose>());
-  for (int i = 0; i < cloudKeyPoses6D->points.size(); ++i) {
-    cloudKeyPoses6D_Copy->push_back(cloudKeyPoses6D->points[i]);
-  }
-  
-  cornerCloudKeyFramesVisualization_Copy.clear();
-  for (int i = 0; i < cloudKeyPoses6D->points.size(); ++i) {
-    pcl::PointCloud<PointType>::Ptr temp_frame;
-    temp_frame.reset(new pcl::PointCloud<PointType>());
-    *temp_frame = *cornerCloudKeyFramesVisualization[i];
-    cornerCloudKeyFramesVisualization_Copy.push_back(temp_frame);
-  }
-
-  patchedGroundKeyFrames_Copy.clear();
-  for (int i = 0; i < patchedGroundKeyFrames.size(); ++i) {
-    pcl::PointCloud<PointType>::Ptr temp_frame;
-    temp_frame.reset(new pcl::PointCloud<PointType>());
-    *temp_frame = *patchedGroundKeyFrames[i];
-    patchedGroundKeyFrames_Copy.push_back(temp_frame);
-  }
-
-  patchedGroundEdgeProcessedKeyFrames_Copy.clear();  
-  for (int i = 0; i < patchedGroundEdgeProcessedKeyFrames.size(); ++i) {
-    pcl::PointCloud<PointType>::Ptr temp_frame;
-    temp_frame.reset(new pcl::PointCloud<PointType>());
-    *temp_frame = *patchedGroundEdgeProcessedKeyFrames[i];
-    patchedGroundEdgeProcessedKeyFrames_Copy.push_back(temp_frame);
-  }
-}
-
-void MapOptimization::publishGlobalMap() {
-  
-  if(!has_m2ci_af3_) return;
-
-  if (cloudKeyPoses3D->points.empty() == true) return;
-
-  for (int i = 0; i < cloudKeyPoses6D_Copy->points.size(); ++i) {
-    *globalMapKeyFrames += *transformPointCloud(
-        cornerCloudKeyFramesVisualization_Copy[i], &cloudKeyPoses6D_Copy->points[i]);
-    *globalMapKeyFrames += *transformPointCloud(
-        outlierCloudKeyFrames[i], &cloudKeyPoses6D_Copy->points[i]);
-  }
-  globalGroundKeyFrames->is_dense = false;
-  globalMapKeyFrames->is_dense = false;
-  //@ transform to map frame --> z pointing to sky
-  pcl::transformPointCloud(*globalMapKeyFrames, *globalMapKeyFrames, trans_m2ci_af3_);
-
-  //@ is there is a nan in the point cloud, the voxel result will be super bad
-  std::vector<int> tmp_rm_nan;
-  pcl::removeNaNFromPointCloud(*globalGroundKeyFrames, *globalGroundKeyFrames, tmp_rm_nan);
-
-  downSizeFilterGlobalMapKeyFrames.setInputCloud(globalMapKeyFrames);
-  downSizeFilterGlobalMapKeyFrames.filter(*globalMapKeyFrames);
-  sensor_msgs::msg::PointCloud2 cloud_msg_map;
-  pcl::toROSMsg(*globalMapKeyFrames, cloud_msg_map);
-  cloud_msg_map.header.stamp = timeLaserOdometry_header_.stamp;
-  cloud_msg_map.header.frame_id = "map";
-  pubMap->publish(cloud_msg_map);
-
-  for (int i = 0; i < patchedGroundEdgeProcessedKeyFrames_Copy.size(); ++i) {
-    pcl::PointCloud<PointType>::Ptr temp_frame;
-    temp_frame = transformPointCloud(patchedGroundKeyFrames_Copy[i], &cloudKeyPoses6D_Copy->points[i]);
-    downSizeFilterGlobalGroundKeyFrames_Copy.setInputCloud(temp_frame);
-    downSizeFilterGlobalGroundKeyFrames_Copy.filter(*temp_frame);
-    *globalGroundKeyFrames += *temp_frame;
-  }
-
-  for (int i = 0; i < patchedGroundEdgeProcessedKeyFrames_Copy.size(); ++i) {
-    pcl::PointCloud<PointType>::Ptr temp_frame;
-    temp_frame = transformPointCloud(patchedGroundEdgeProcessedKeyFrames_Copy[i], &cloudKeyPoses6D_Copy->points[i]);
-    downSizeFilterGlobalGroundKeyFrames_Copy.setInputCloud(temp_frame);
-    downSizeFilterGlobalGroundKeyFrames_Copy.filter(*temp_frame);
-    *globalGroundKeyFrames += *temp_frame;
-  }
-
-  std::lock_guard<std::mutex> lock(mtx);
-  //@ transform to map frame --> z pointing to sky
-  pcl::transformPointCloud(*globalGroundKeyFrames, *globalGroundKeyFrames, trans_m2ci_af3_);
-
-  //@ is there is a nan in the point cloud, the voxel result will be super bad
-  std::vector<int> tmp_rm_nan2;
-  pcl::removeNaNFromPointCloud(*globalGroundKeyFrames, *globalGroundKeyFrames, tmp_rm_nan2);
-
-  downSizeFilterGlobalGroundKeyFrames_Copy.setInputCloud(globalGroundKeyFrames);
-  downSizeFilterGlobalGroundKeyFrames_Copy.filter(*globalGroundKeyFrames);
-  
-  current_ground_size_ = globalGroundKeyFrames->points.size();
-
-  sensor_msgs::msg::PointCloud2 cloud_msg_ground;
-  pcl::toROSMsg(*globalGroundKeyFrames, cloud_msg_ground);
-  cloud_msg_ground.header.stamp = timeLaserOdometry_header_.stamp;
-  cloud_msg_ground.header.frame_id = "map";
-  pubGround->publish(cloud_msg_ground);
-  
-
-  globalMapKeyFrames.reset(new pcl::PointCloud<PointType>());
-  globalGroundKeyFrames.reset(new pcl::PointCloud<PointType>());
 }
 
 bool MapOptimization::detectLoopClosure() {
@@ -1329,139 +1199,6 @@ void MapOptimization::extractSurroundingKeyFrames() {
   downSizeFilterSurf.filter(*laserCloudSurfFromMapDS);
   laserCloudSurfFromMapDSNum = laserCloudSurfFromMapDS->points.size();
 
-}
-
-void MapOptimization::groundEdgeDetectionThread() {
-
-  if(cloudKeyPoses3D->points.empty()) 
-    return;
-  
-  if(cloudKeyPoses6D->points.size()<=patchedGroundEdgeProcessedKeyFrames.size()){
-    return;
-  }
-  
-  if(cloudKeyPoses6D->points.size()<patchedGroundEdgeKeyFrames.size()){
-    return;
-  }
-  
-  PointType current_processing_ground_edge_num;
-  current_processing_ground_edge_num = cloudKeyPoses3D->points[ground_edge_processed_.size()];
-
-  pcl::PointCloud<PointType>::Ptr patched_ground;
-  patched_ground.reset(new pcl::PointCloud<PointType>());
-  pcl::KdTreeFLANN<PointType> kdtree_key_pose;
-  kdtree_key_pose.setInputCloud(cloudKeyPoses3D);
-  std::vector<int> pointSearchInd;
-  std::vector<float> pointSearchSqDis;
-  kdtree_key_pose.radiusSearch(current_processing_ground_edge_num, 10.0, pointSearchInd, pointSearchSqDis);
-  for(auto i=pointSearchInd.begin();i!=pointSearchInd.end();i++)
-  {  
-    //RCLCPP_INFO(this->get_logger(), "%.2f, %.2f, %.2f", cloudKeyPoses6D->points[*i].x, cloudKeyPoses6D->points[*i].y, cloudKeyPoses6D->points[*i].z);
-    if(fabs(current_processing_ground_edge_num.y-cloudKeyPoses6D->points[*i].y)<1.0){
-      *patched_ground += *transformPointCloud(patchedGroundKeyFrames[*i], &cloudKeyPoses6D->points[*i]);
-    }
-  }
-  
-  //@ generate ground kdtree for edge to search
-  pcl::VoxelGrid<PointType> ds_patched_ground;
-  ds_patched_ground.setLeafSize(0.1, 0.5, 0.1); //we are in camera frame, z pointing to moving direction, y pointing to sky 
-  ds_patched_ground.setInputCloud(patched_ground);
-  ds_patched_ground.filter(*patched_ground);
-  pcl::KdTreeFLANN<PointType> kdtree_ground;
-  kdtree_ground.setInputCloud(patched_ground);
-  
-  //@ reprocess old edge frame, because we had new ground information, so new edge will be pushed back to keypose frames
-  pcl::PointCloud<PointType>::Ptr patched_ground_edge_camera_frame;
-  
-  pointSearchInd.clear();
-  pointSearchSqDis.clear();
-  kdtree_key_pose.radiusSearch(current_processing_ground_edge_num, 5.0, pointSearchInd, pointSearchSqDis);
-  for(auto i=pointSearchInd.begin();i!=pointSearchInd.end();i++)
-  {
-    if(fabs(current_processing_ground_edge_num.y - cloudKeyPoses3D->points[*i].y)>1.0){
-      continue;
-    }
-    
-    if((*i)>=patchedGroundEdgeProcessedKeyFrames.size())
-      continue;
-
-    pcl::PointCloud<PointType>::Ptr processed_ground_edge_last;
-    processed_ground_edge_last.reset(new pcl::PointCloud<PointType>());
-    patched_ground_edge_camera_frame.reset(new pcl::PointCloud<PointType>());
-    *patched_ground_edge_camera_frame = *transformPointCloud(patchedGroundEdgeKeyFrames[*i], &cloudKeyPoses6D->points[*i]);
-    for(size_t j=0;j!=patched_ground_edge_camera_frame->points.size();j++){
-      PointType current_pt = patched_ground_edge_camera_frame->points[j];
-      std::vector<int> pointIdxRadiusSearch;
-      std::vector<float> pointRadiusSquaredDistance;
-      if(!pcl::isFinite(current_pt))
-        continue;
-      
-      kdtree_ground.radiusSearch (current_pt, 0.5, pointIdxRadiusSearch, pointRadiusSquaredDistance);
-      if(pointIdxRadiusSearch.size()<ground_edge_threshold_num_){
-        patched_ground_edge_camera_frame->points[j].intensity = 1000;
-        processed_ground_edge_last->push_back(patched_ground_edge_camera_frame->points[j]);
-        
-        for(auto k=0;k!=pointIdxRadiusSearch.size();k++){
-          auto index = pointIdxRadiusSearch[k];
-          double dx = patched_ground->points[index].x - patched_ground_edge_camera_frame->points[j].x;
-          //double dy = patched_ground->points[index].y - patched_ground_edge_camera_frame->points[j].y;
-          double dz = patched_ground->points[index].z - patched_ground_edge_camera_frame->points[j].z;
-          double distance = sqrt(dx*dx+dz*dz);
-          patched_ground->points[index].intensity = 100.0/(1.0+distance);
-          processed_ground_edge_last->push_back(patched_ground->points[index]);
-        }
-        
-      }
-
-    }
-
-    pcl::VoxelGrid<PointType> ds_processed_ground_edge_last;
-    ds_processed_ground_edge_last.setLeafSize(0.1, 0.2, 0.1); //we are in camera frame, z pointing to moving direction, y pointing to sky 
-    ds_processed_ground_edge_last.setInputCloud(processed_ground_edge_last);
-    ds_processed_ground_edge_last.filter(*processed_ground_edge_last);  
-    *processed_ground_edge_last = *transformPointCloudInverse(processed_ground_edge_last, &cloudKeyPoses6D->points[*i]);  
-    patchedGroundEdgeProcessedKeyFrames[*i] = processed_ground_edge_last;
-  
-  }
-  
-  //@ process current frame
-  pcl::PointCloud<PointType>::Ptr processed_ground_edge_current;
-  processed_ground_edge_current.reset(new pcl::PointCloud<PointType>());
-  patched_ground_edge_camera_frame.reset(new pcl::PointCloud<PointType>());
-  *patched_ground_edge_camera_frame = *transformPointCloud(patchedGroundEdgeKeyFrames[patchedGroundEdgeKeyFrames.size()-1], &cloudKeyPoses6D->points[patchedGroundEdgeKeyFrames.size()-1]);
-  for(size_t it=0;it!=patched_ground_edge_camera_frame->points.size();it++){
-    PointType current_pt = patched_ground_edge_camera_frame->points[it];
-    std::vector<int> pointIdxRadiusSearch;
-    std::vector<float> pointRadiusSquaredDistance;
-    if(!pcl::isFinite(current_pt))
-      continue;
-    if(kdtree_ground.radiusSearch (current_pt, 0.5, pointIdxRadiusSearch, pointRadiusSquaredDistance)<ground_edge_threshold_num_){
-      patched_ground_edge_camera_frame->points[it].intensity = 1000;
-      processed_ground_edge_current->push_back(patched_ground_edge_camera_frame->points[it]);
-    }
-  }
-  *processed_ground_edge_current = *transformPointCloudInverse(processed_ground_edge_current, &cloudKeyPoses6D->points[patchedGroundEdgeKeyFrames.size()-1]);
-  patchedGroundEdgeProcessedKeyFrames.push_back(processed_ground_edge_current);
-  ground_edge_processed_.push_back(true);
-  
-  pcl::PointCloud<PointType>::Ptr  globalGroundEdgeKeyFrames;
-  globalGroundEdgeKeyFrames.reset(new pcl::PointCloud<PointType>());
-  for (int i = 0; i < ground_edge_processed_.size(); ++i) {
-    *globalGroundEdgeKeyFrames += *transformPointCloud(
-        patchedGroundEdgeProcessedKeyFrames[i], &cloudKeyPoses6D->points[i]);
-  }
-
-  //@ transform to map frame --> z pointing to sky
-  pcl::transformPointCloud(*globalGroundEdgeKeyFrames, *globalGroundEdgeKeyFrames, trans_m2ci_af3_);
-  //RCLCPP_INFO(this->get_logger(),"%lu, %lu", ground_edge_processed_.size(), globalGroundEdgeKeyFrames->points.size());
-  downSizeFilterGlobalGroundKeyFrames_Copy.setInputCloud(globalGroundEdgeKeyFrames);
-  downSizeFilterGlobalGroundKeyFrames_Copy.filter(*globalGroundEdgeKeyFrames);
-  sensor_msgs::msg::PointCloud2 cloud_msg_ground_edge;
-  pcl::toROSMsg(*globalGroundEdgeKeyFrames, cloud_msg_ground_edge);
-  cloud_msg_ground_edge.header.stamp = timeLaserOdometry_header_.stamp;
-  cloud_msg_ground_edge.header.frame_id = "map";
-  pubGroundEdge->publish(cloud_msg_ground_edge);
-  
 }
 
 void MapOptimization::downsampleCurrentScan() {
