@@ -1,7 +1,7 @@
 bag_reader:
   ros__parameters:
     use_sim_time: true
-    bag_file_dir: "/root/dddmr_bags/airy_human_0"
+    bag_file_dir: "/root/dddmr_bags/airy_45deg_labelled_bag/airy_human_map"
     point_cloud_topic: "/airy_points"
     odometry_topic: "/odom"
     skip_frame: 1
@@ -17,7 +17,7 @@ lego_loam_ip:
         num_horizontal_scans: 400
         vertical_angle_bottom: 0.0          # degrees
         vertical_angle_top: 90.0            # degrees
-        scan_period: 0.1                   # seconds
+        scan_period: 0.0                   # seconds
 
     imageProjection:
         segment_valid_point_num: 5
