@@ -177,9 +177,6 @@ void FeatureAssociation::initializeValue() {
   mappingOdometry.header.frame_id = "camera_init";
   mappingOdometry.child_frame_id = "laser_odom";
 
-  laserOdometryTrans.header.frame_id = "camera_init";
-  laserOdometryTrans.child_frame_id = "laser_odom";
-
   isDegenerate = false;
 
   frameCount = skipFrameNum;
@@ -201,7 +198,7 @@ void FeatureAssociation::tfInitial(){
 void FeatureAssociation::odomHandler(const nav_msgs::msg::Odometry::SharedPtr odomIn){
   
   odom_topic_alive_ = true;
-  wheelOdometry = (*odomIn);
+  exteralOdometry = (*odomIn);
 
   if(!odom_tf_alive_ && odom_tf_detect_number_<3){
 
@@ -268,12 +265,12 @@ void FeatureAssociation::odomHandler(const nav_msgs::msg::Odometry::SharedPtr od
   double odom_time = static_cast<double>(odomIn->header.stamp.sec) + static_cast<double>(odomIn->header.stamp.nanosec) * 1e-9;
   double cloud_time = static_cast<double>(segInfo.header.stamp.sec) + static_cast<double>(segInfo.header.stamp.nanosec) * 1e-9;
   //if(fabs(odom_time-cloud_time)<0.05 || fabs(odom_time)<=0.1 || fabs(cloud_time)<=0.1){ //@ try to handle 0 timestamp
-    transformWheelOdometrySum[0] = pitch;
-    transformWheelOdometrySum[1] = yaw;
-    transformWheelOdometrySum[2] = roll;
-    transformWheelOdometrySum[3] = odomIn->pose.pose.position.y;
-    transformWheelOdometrySum[4] = odomIn->pose.pose.position.z;
-    transformWheelOdometrySum[5] = odomIn->pose.pose.position.x;
+    transformExternalOdometrySum[0] = pitch;
+    transformExternalOdometrySum[1] = yaw;
+    transformExternalOdometrySum[2] = roll;
+    transformExternalOdometrySum[3] = odomIn->pose.pose.position.y;
+    transformExternalOdometrySum[4] = odomIn->pose.pose.position.z;
+    transformExternalOdometrySum[5] = odomIn->pose.pose.position.x;
   //}
 
   
@@ -1364,17 +1361,6 @@ void FeatureAssociation::assignMappingOdometry(float (&ts)[6]){
     mappingOdometry.pose.pose.position.y = ts[4];
     mappingOdometry.pose.pose.position.z = ts[5];
     //pubLaserOdometry->publish(mappingOdometry);
-
-    laserOdometryTrans.header.stamp = cloudHeader.stamp;
-    laserOdometryTrans.transform.rotation.x = -geoQuat.y;
-    laserOdometryTrans.transform.rotation.y = -geoQuat.z;
-    laserOdometryTrans.transform.rotation.z = geoQuat.x;
-    laserOdometryTrans.transform.rotation.w = geoQuat.w;
-    laserOdometryTrans.transform.translation.x = ts[3];
-    laserOdometryTrans.transform.translation.y = ts[4];
-    laserOdometryTrans.transform.translation.z = ts[5];
-
-    //tf_broadcaster_->sendTransform(laserOdometryTrans);
 }
 
 void FeatureAssociation::publishOdometryPath() {
@@ -1399,7 +1385,7 @@ void FeatureAssociation::publishOdometryPath() {
   pubOriginizedLaserOdometryPath->publish(laser_odom_path_);
 
   //-------------------------------------------
-  quat_tf.setRPY(transformWheelOdometrySum[2], -transformWheelOdometrySum[0], -transformWheelOdometrySum[1]);
+  quat_tf.setRPY(transformExternalOdometrySum[2], -transformExternalOdometrySum[0], -transformExternalOdometrySum[1]);
   tf2::convert(quat_tf, geoQuat);  
 
   geometry_msgs::msg::PoseStamped tmp_pose2;
@@ -1408,9 +1394,9 @@ void FeatureAssociation::publishOdometryPath() {
   tmp_pose2.pose.orientation.y = -geoQuat.z;
   tmp_pose2.pose.orientation.z = geoQuat.x;
   tmp_pose2.pose.orientation.w = geoQuat.w;
-  tmp_pose2.pose.position.x = transformWheelOdometrySum[3];
-  tmp_pose2.pose.position.y = transformWheelOdometrySum[4];
-  tmp_pose2.pose.position.z = transformWheelOdometrySum[5];
+  tmp_pose2.pose.position.x = transformExternalOdometrySum[3];
+  tmp_pose2.pose.position.y = transformExternalOdometrySum[4];
+  tmp_pose2.pose.position.z = transformExternalOdometrySum[5];
   wheel_odom_path_.poses.push_back(tmp_pose2);
   pubOriginizedWheelOdometryPath->publish(wheel_odom_path_);
 }
@@ -1524,9 +1510,9 @@ void FeatureAssociation::runFeatureAssociation() {
     initializeValue();
 
     //@ inital default value
-    wheelOdometry.pose.pose.orientation.w = 1.0;
-    wheelOdometry.header.frame_id = "odom";
-    wheelOdometry.child_frame_id = baselink_frame_;
+    exteralOdometry.pose.pose.orientation.w = 1.0;
+    exteralOdometry.header.frame_id = "odom";
+    exteralOdometry.child_frame_id = baselink_frame_;
 
     initialize_laser_odom_at_first_frame_ = true;
     return;
@@ -1551,11 +1537,11 @@ void FeatureAssociation::runFeatureAssociation() {
   integrateTransformation();
 
   if(odom_type_=="laser_odometry"){
-    wheelOdometry.header.stamp = cloudHeader.stamp;
+    exteralOdometry.header.stamp = cloudHeader.stamp;
     assignMappingOdometry(transformLaserOdometrySum);
   }
   else{
-    assignMappingOdometry(transformWheelOdometrySum);
+    assignMappingOdometry(transformExternalOdometrySum);
   }
 
   //publishOdometryPath();
@@ -1584,7 +1570,7 @@ void FeatureAssociation::runFeatureAssociation() {
     out.trans_c2s = trans_c2s_;
     out.trans_b2s = projection.trans_b2s;
     out.trans_m2ci = projection.trans_m2ci;
-    out.wheel_odometry = wheelOdometry;
+    out.external_odometry = exteralOdometry;
     _output_channel.send(std::move(out));
   }
   

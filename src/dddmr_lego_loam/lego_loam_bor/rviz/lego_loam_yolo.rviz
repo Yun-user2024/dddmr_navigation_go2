@@ -53,12 +53,12 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: Intensity
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
-      Max Intensity: 255
+      Max Intensity: 213
       Min Color: 0; 0; 0
-      Min Intensity: 6
+      Min Intensity: 1
       Name: Raw
       Position Transformer: XYZ
       Selectable: true
@@ -71,10 +71,10 @@ Visualization Manager:
         Filter size: 1
         History Policy: Keep Last
         Reliability Policy: Best Effort
-        Value: /lslidar_point_cloud
+        Value: /airy_points
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
+      Value: false
     - Alpha: 1
       Autocompute Intensity Bounds: false
       Autocompute Value Bounds:

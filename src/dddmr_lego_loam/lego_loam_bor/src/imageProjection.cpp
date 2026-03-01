@@ -223,6 +223,9 @@ ImageProjection::ImageProjection(std::string name, Channel<ProjectionOut>& outpu
     YoloV8Config config;
     yolov8_ = std::make_shared<YoloV8>("", trt_model_path_, config);
   }
+  else{
+    RCLCPP_ERROR(this->get_logger(), "\033[1;31mtensorRT is specified but %s does not exist\033[0m", trt_model_path_.c_str());
+  }
 #endif
 
   const size_t cloud_size = _vertical_scans * _horizontal_scans;
@@ -909,8 +912,6 @@ void ImageProjection::cloudSegmentation() {
 
     for (size_t j = 0; j < _horizontal_scans; ++j) {
       if (_label_mat(i, j) > 0 || _ground_mat(i, j) == 1) {
-        if(_label_mat(i,j)==-2) //yolo label
-          continue;
         // outliers that will not be used for optimization (always continue)
         if (_label_mat(i, j) == 999999) {
           if (j % 5 == 0) {

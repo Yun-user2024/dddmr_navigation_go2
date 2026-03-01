@@ -122,7 +122,7 @@ public:
                        gtsam::Pose3 poseTo, float icp_score);
   void publishKeyPosesAndFrames();
 
-  nav_msgs::msg::Odometry wheelOdometry;
+  nav_msgs::msg::Odometry externalOdometry;
   Eigen::Affine3d trans_m2ci_af3_, trans_c2s_af3_, trans_s2c_af3_,
       trans_b2s_af3_;
 

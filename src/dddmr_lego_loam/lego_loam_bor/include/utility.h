@@ -91,7 +91,7 @@ struct AssociationOut
   geometry_msgs::msg::TransformStamped trans_b2s;
   geometry_msgs::msg::TransformStamped trans_m2ci;
   nav_msgs::msg::Odometry decisive_odometry; //in the lego_loam definition frame
-  nav_msgs::msg::Odometry wheel_odometry; //wheel odom, odom->baselink frame
+  nav_msgs::msg::Odometry external_odometry; //external odom, odom->baselink frame
   bool broadcast_odom_tf;
 };
 

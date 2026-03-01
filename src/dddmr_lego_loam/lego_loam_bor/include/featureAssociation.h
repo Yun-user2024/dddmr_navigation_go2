@@ -30,7 +30,7 @@ class FeatureAssociation : public rclcpp::Node
   void tfInitial();
   bool systemInitedLM;
   nav_msgs::msg::Odometry mappingOdometry;
-  nav_msgs::msg::Odometry wheelOdometry;
+  nav_msgs::msg::Odometry exteralOdometry;
   
  private:
 
@@ -118,7 +118,7 @@ class FeatureAssociation : public rclcpp::Node
 
   float transformCur[6];
   float transformLaserOdometrySum[6];
-  float transformWheelOdometrySum[6];
+  float transformExternalOdometrySum[6];
 
   pcl::PointCloud<PointType>::Ptr laserCloudCornerLast;
   pcl::PointCloud<PointType>::Ptr laserCloudSurfLast;
@@ -132,7 +132,6 @@ class FeatureAssociation : public rclcpp::Node
   std::vector<float> pointSearchSqDis;
 
   std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
-  geometry_msgs::msg::TransformStamped laserOdometryTrans;
 
   bool isDegenerate;
 
