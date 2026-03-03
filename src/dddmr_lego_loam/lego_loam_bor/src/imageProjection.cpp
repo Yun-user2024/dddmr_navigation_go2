@@ -467,10 +467,18 @@ void ImageProjection::projectPointCloud() {
       // 2. Split the 16-bit integer into high and low bytes
       uint8_t high_byte = (uint8_t)(scaled_int >> 8);
       uint8_t low_byte = (uint8_t)(scaled_int & 0xFF);
+      if(high_byte>0){
+        high_byte*=4;
+        projected_image.at<cv::Vec3b>(_vertical_scans-rowIdn, viscolumnIdn)[0] = 0XFF;
+        projected_image.at<cv::Vec3b>(_vertical_scans-rowIdn, viscolumnIdn)[1] = 0XFF-low_byte;
+        projected_image.at<cv::Vec3b>(_vertical_scans-rowIdn, viscolumnIdn)[2] = 0xFF-high_byte*8;
+      }
+      else{
+        projected_image.at<cv::Vec3b>(_vertical_scans-rowIdn, viscolumnIdn)[0] = high_byte;
+        projected_image.at<cv::Vec3b>(_vertical_scans-rowIdn, viscolumnIdn)[1] = low_byte;
+        projected_image.at<cv::Vec3b>(_vertical_scans-rowIdn, viscolumnIdn)[2] = 0;
+      }
 
-      projected_image.at<cv::Vec3b>(_vertical_scans-rowIdn, viscolumnIdn)[0] = high_byte;
-      projected_image.at<cv::Vec3b>(_vertical_scans-rowIdn, viscolumnIdn)[1] = low_byte;
-      projected_image.at<cv::Vec3b>(_vertical_scans-rowIdn, viscolumnIdn)[2] = 0;
       
     }
 

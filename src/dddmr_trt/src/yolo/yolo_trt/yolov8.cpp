@@ -424,7 +424,7 @@ void YoloV8::drawObjectLabels(cv::Mat &image, const std::vector<Object> &objects
             mask(object.rect).setTo(color * 255, object.boxMask);
         }
         // Add all the masks to our image
-        cv::addWeighted(image, 0.5, mask, 0.8, 1, image);
+        cv::addWeighted(image, 0.2, mask, 0.8, 1, image);
     }
 
     return; //depth image is small, annotation will cover the result
