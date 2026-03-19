@@ -247,27 +247,27 @@ void MapOptimization::pcdSaver(const std::shared_ptr<std_srvs::srv::Empty::Reque
     //    *transformPointCloud(outlierCloudKeyFrames[thisKeyInd],
     //                         &cloudKeyPoses6D->points[thisKeyInd]);
   }
-  
+
   //@ -----Write poses-----
   pcl::PointCloud<PointTypePose> cloudKeyPoses6DBaseLink;
+  std::vector<geometry_msgs::msg::TransformStamped> cloudKeyPoses6DBaseLink_geo;
   for(auto it = cloudKeyPoses6D->points.begin(); it!=cloudKeyPoses6D->points.end(); it++){
-    tf2::Transform key_pose_ci2c;
+    tf2::Transform tf2_trans_ci2c;
     tf2::Quaternion q;
     q.setRPY( (*it).roll, (*it).pitch, (*it).yaw);
-    key_pose_ci2c.setRotation(q);
-    key_pose_ci2c.setOrigin(tf2::Vector3((*it).x, (*it).y, (*it).z));
+    tf2_trans_ci2c.setRotation(q);
+    tf2_trans_ci2c.setOrigin(tf2::Vector3((*it).x, (*it).y, (*it).z));
 
-    tf2::Transform key_pose_ci2b;
-    key_pose_ci2b.mult(key_pose_ci2c, tf2_trans_c2s_);
+    tf2::Transform tf2_trans_m2c, tf2_trans_m2s, tf2_trans_m2b;
+    tf2_trans_m2c.mult(tf2_trans_m2ci_, tf2_trans_ci2c);
+    tf2_trans_m2s.mult(tf2_trans_m2c, tf2_trans_c2s_);
+    tf2_trans_m2b.mult(tf2_trans_m2s, tf2_trans_b2s_.inverse());
 
-    tf2::Transform key_pose_m2b;
-    key_pose_m2b.mult(tf2_trans_m2ci_, key_pose_ci2b);
-    
     PointTypePose pt;
-    pt.x = key_pose_m2b.getOrigin().x();
-    pt.y = key_pose_m2b.getOrigin().y();
-    pt.z = key_pose_m2b.getOrigin().z();
-    tf2::Matrix3x3 m(key_pose_m2b.getRotation());
+    pt.x = tf2_trans_m2b.getOrigin().x();
+    pt.y = tf2_trans_m2b.getOrigin().y();
+    pt.z = tf2_trans_m2b.getOrigin().z();
+    tf2::Matrix3x3 m(tf2_trans_m2b.getRotation());
     double roll, pitch, yaw;
     m.getRPY(roll, pitch, yaw);
     pt.roll = roll;
@@ -275,6 +275,16 @@ void MapOptimization::pcdSaver(const std::shared_ptr<std_srvs::srv::Empty::Reque
     pt.yaw = yaw;
     pt.intensity = (*it).intensity;
     cloudKeyPoses6DBaseLink.push_back(pt);
+
+    geometry_msgs::msg::TransformStamped pose_6d_geo;
+    pose_6d_geo.transform.translation.x = tf2_trans_m2b.getOrigin().x();
+    pose_6d_geo.transform.translation.y = tf2_trans_m2b.getOrigin().y();
+    pose_6d_geo.transform.translation.z = tf2_trans_m2b.getOrigin().z();
+    pose_6d_geo.transform.rotation.x = tf2_trans_m2b.getRotation().x();
+    pose_6d_geo.transform.rotation.y = tf2_trans_m2b.getRotation().y();
+    pose_6d_geo.transform.rotation.z = tf2_trans_m2b.getRotation().z();
+    pose_6d_geo.transform.rotation.w = tf2_trans_m2b.getRotation().w();
+    cloudKeyPoses6DBaseLink_geo.push_back(pose_6d_geo);
   }  
   pcl::io::savePCDFileASCII(mapping_dir_string + "/poses.pcd", cloudKeyPoses6DBaseLink);
   
@@ -295,20 +305,29 @@ void MapOptimization::pcdSaver(const std::shared_ptr<std_srvs::srv::Empty::Reque
   std::string pcd_dir = mapping_dir_string + "/pcd";
   std::filesystem::create_directory(pcd_dir);
   for (int i = 0; i < cloudKeyPoses6D->points.size(); ++i) {
+
+    Eigen::Affine3d af3 = tf2::transformToEigen(cloudKeyPoses6DBaseLink_geo[i]);
+
     keyFrameCorner.reset(new pcl::PointCloud<PointType>());
     int thisKeyInd = (int)cloudKeyPoses6D->points[i].intensity;
     *keyFrameCorner += (*cornerCloudKeyFrames[thisKeyInd]);
-    pcl::transformPointCloud(*keyFrameCorner, *keyFrameCorner, trans_s2c_af3_);
+    *keyFrameCorner= *transformPointCloud(keyFrameCorner, &cloudKeyPoses6D->points[i]);
+    pcl::transformPointCloud(*keyFrameCorner, *keyFrameCorner, trans_m2ci_af3_);
+    pcl::transformPointCloud(*keyFrameCorner, *keyFrameCorner, af3.inverse());
     pcl::io::savePCDFileASCII(pcd_dir + "/" + std::to_string(thisKeyInd) + "_feature.pcd", *keyFrameCorner);
 
     keyFrameGround.reset(new pcl::PointCloud<PointType>());
     *keyFrameGround += (*patchedGroundKeyFrames[thisKeyInd]);
-    pcl::transformPointCloud(*keyFrameGround, *keyFrameGround, trans_s2c_af3_);
+    *keyFrameGround= *transformPointCloud(keyFrameGround, &cloudKeyPoses6D->points[i]);
+    pcl::transformPointCloud(*keyFrameGround, *keyFrameGround, trans_m2ci_af3_);
+    pcl::transformPointCloud(*keyFrameGround, *keyFrameGround, af3.inverse());
     pcl::io::savePCDFileASCII(pcd_dir + "/" + std::to_string(thisKeyInd) + "_ground.pcd", *keyFrameGround);
 
     keyFrameSurface.reset(new pcl::PointCloud<PointType>());
     *keyFrameSurface += (*surfCloudKeyFrames[thisKeyInd]);
-    pcl::transformPointCloud(*keyFrameSurface, *keyFrameSurface, trans_s2c_af3_);
+    *keyFrameSurface= *transformPointCloud(keyFrameSurface, &cloudKeyPoses6D->points[i]);
+    pcl::transformPointCloud(*keyFrameSurface, *keyFrameSurface, trans_m2ci_af3_);
+    pcl::transformPointCloud(*keyFrameSurface, *keyFrameSurface, af3.inverse());
     pcl::io::savePCDFileASCII(pcd_dir + "/" + std::to_string(thisKeyInd) + "_surface.pcd", *keyFrameSurface);
   }  
 
