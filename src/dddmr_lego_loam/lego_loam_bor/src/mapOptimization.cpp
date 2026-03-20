@@ -1210,12 +1210,19 @@ void MapOptimization::extractSurroundingKeyFrames() {
   }
   
   // Downsample the surrounding corner key frames (or map)
+  std::vector<int> indices_tmp1;
+  laserCloudCornerFromMap->is_dense = false;
+  pcl::removeNaNFromPointCloud(*laserCloudCornerFromMap, *laserCloudCornerFromMap, indices_tmp1);
   downSizeFilterCorner.setInputCloud(laserCloudCornerFromMap);
   downSizeFilterCorner.filter(*laserCloudCornerFromMapDS);
   laserCloudCornerFromMapDSNum = laserCloudCornerFromMapDS->points.size();
   // Downsample the surrounding surf key frames (or map)
+  std::vector<int> indices_tmp2;
+  laserCloudSurfFromMap->is_dense = false;
+  pcl::removeNaNFromPointCloud(*laserCloudSurfFromMap, *laserCloudSurfFromMap, indices_tmp2);
   downSizeFilterSurf.setInputCloud(laserCloudSurfFromMap);
   downSizeFilterSurf.filter(*laserCloudSurfFromMapDS);
+  RCLCPP_ERROR(this->get_logger(), "%lu, %lu", laserCloudSurfFromMap->points.size(), laserCloudSurfFromMapDS->points.size());
   laserCloudSurfFromMapDSNum = laserCloudSurfFromMapDS->points.size();
 
 }
@@ -1590,6 +1597,7 @@ bool MapOptimization::LMOptimization(int iterCount) {
 
 void MapOptimization::scan2MapOptimization() {
   std::lock_guard<std::mutex> lock(mtx);
+  //RCLCPP_ERROR(this->get_logger(), "%lu, %lu", laserCloudCornerFromMapDSNum, laserCloudSurfFromMapDSNum);
   if (laserCloudCornerFromMapDSNum > 10 && laserCloudSurfFromMapDSNum > 100) {
     kdtreeCornerFromMap.setInputCloud(laserCloudCornerFromMapDS);
     kdtreeSurfFromMap.setInputCloud(laserCloudSurfFromMapDS);
@@ -1618,6 +1626,7 @@ void MapOptimization::scan2MapOptimization() {
     cloud_msg_selected_lm.header.stamp = timeLaserOdometry_header_.stamp;
     cloud_msg_selected_lm.header.frame_id = "camera_init";
     pubSelectedCloudForLMOptimization->publish(cloud_msg_selected_lm);
+    
   }
   
 }
@@ -1636,7 +1645,6 @@ void MapOptimization::saveKeyFramesAndFactor() {
   currentRobotPosPoint_.y = transformAftMapped[4];
   currentRobotPosPoint_.z = transformAftMapped[5];
   
-
   bool saveThisKeyFrame = true;
   if (sqrt((previousRobotPos_.x - currentRobotPos_.x) *
                (previousRobotPos_.x - currentRobotPos_.x) +
@@ -1646,6 +1654,7 @@ void MapOptimization::saveKeyFramesAndFactor() {
                (previousRobotPos_.z - currentRobotPos_.z)) < distance_between_key_frame_ &&
                fabs(previousRobotPos_.yaw - currentRobotPos_.yaw) < angle_between_key_frame_) {
     saveThisKeyFrame = false;
+    
   }
   
   if(current_ground_size_<100 && cloudKeyPoses3D->points.size()<10){
@@ -1749,7 +1758,7 @@ void MapOptimization::saveKeyFramesAndFactor() {
   thisPose6D.yaw = latestEstimate.rotation().roll();  // in camera frame
   thisPose6D.time = timeLaserOdometry;
   cloudKeyPoses6D->push_back(thisPose6D);
-
+  
   //
   // save updated transform
   //
@@ -1962,7 +1971,7 @@ void MapOptimization::runWoLO(){
   OdometryToTransform(decisive_odometry, transformSum);
 
   transformAssociateToMap();
-  
+
   publishTF();
 
   clearCloud();
