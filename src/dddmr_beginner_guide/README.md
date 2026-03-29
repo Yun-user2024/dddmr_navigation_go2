@@ -1,6 +1,14 @@
 # DDDMR BEGINNER GUIDE
 
-This README is a beginner’s guide to the DDDMR Navigation Stack. With both a Gazebo quadruped robot example and a real robot guide, it’s designed to help you get up and running fast, explore, and have fun along the way.
+This README is a beginner's guide to the DDDMR Navigation Stack. With both a gazebo quadruped robot example and a real robot guide, it's designed to help you get up and running fast, explore, and have fun along the way.
+
+## Table of Contents
+
+| # | Section | Description |
+|:-:|:--------|:------------|
+| 1 | [DDDMR Navigation with Gazebo]| Simulation demo with quadruped robot |
+| 2 | [DDDMR Navigation with a Real Robot]| Deploy on your real robot (wheeled robot, quadruped, humanoid, and more) |
+
 ## 🖥️ Software Requirements
 - **Ubuntu 22.04** (tested in 22.04, should support 24.04)
 - **Docker**  [install Docker](https://docs.docker.com/engine/install/)
@@ -84,7 +92,19 @@ This guide will walk you through setting up **3D navigation** on your real robot
 
 DDDMR brings 3D navigation to your wheeled robot, quadruped, humanoid, and more. Let's get your robot moving!
 
-### Our Test Platform
+### 1. Create docker image
+
+Clone the repo and run ./build.bash, please select **`x64`** or **`l4t`** depending on your platform.
+
+```bash
+cd ~
+git clone https://github.com/dfl-rlab/dddmr_navigation.git
+cd ~/dddmr_navigation/dddmr_docker/docker_file && ./build.bash
+```
+
+> **Note:** Our test platform uses Jetson Orin Nano, so we select **`l4t`**.
+
+### 2. Test Platform
 
 To quickly match this tutorial, here is the hardware setup we use:
 
@@ -102,7 +122,7 @@ To quickly match this tutorial, here is the hardware setup we use:
 
 > **Note:** You don't need the exact same hardware. As long as your system meets the requirements below, DDDMR will work.
 
-### 👉 Requirements
+#### Requirements
 
 | Item | Topic | Message Type | Description |
 |:----:|:------|:-------------|:------------|
@@ -140,7 +160,7 @@ Here is the TF configuration using our quadruped robot as an example. The LiDAR 
 
 > **Note:** 45° ≈ 0.785 rad. Pitch down.
 
-### 👉 Advanced (Optional)
+#### 👉 Advanced (Optional)
 
 | Feature | Description |
 |:--------|:------------|
@@ -148,7 +168,7 @@ Here is the TF configuration using our quadruped robot as an example. The LiDAR 
 
 ---
 
-## 🚀 Navigation Workflows
+### 3. 🚀 RUN Mapping + Navigation for robot
 
 DDDMR supports three navigation workflows:
 
@@ -161,7 +181,7 @@ DDDMR supports three navigation workflows:
 ---
 
 
-## 🚧 Mapping
+### 3.1 🗺️ Mapping
 
 Before starting, make sure your robot is publishing the required topics:
 
@@ -187,7 +207,7 @@ When you drive your robot around, you will notice:
 - **Ground points** — detected ground surface
 - **2D projection** — helps you understand the scene and LiDAR FOV
 
-### Save the Map
+#### Save the Map
 
 After you finish mapping the area, open a new terminal and run:
 
@@ -211,7 +231,7 @@ mv /tmp/2026_03_28_19_25_15/ /root/dddmr_bags/
 
 ---
 
-## 🚧 Localization + Navigation
+### 3.2 📍 Localization + Navigation
 
 First, open the configuration file and set your map path:
 
@@ -239,13 +259,13 @@ ros2 launch dddmr_beginner_guide airy_tilt45_navigation.launch
   <img src="https://github.com/dfl-rlab/dddmr_documentation_materials/blob/main/dddmr_beginner_guide/LOC_NAV_realrobot_rviz.png" width="800" height="500"/>
 </p>
 
-### Step 1: Give Initial Pose
+##### Step 1: Give Initial Pose
 
 Click **「3D Pose Estimate」** in RViz toolbar and select a ground point that matches your robot's real-world position.
 
 If the initial pose is correct, you will see the observed point cloud overlap well with the map features.
 
-### Step 2: Send Goal
+##### Step 2: Send Goal
 
 Once initialization is done, click **「3D Goal Pose」** and select a ground point as the goal.
 
