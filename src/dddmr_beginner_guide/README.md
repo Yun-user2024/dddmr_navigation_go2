@@ -1,5 +1,7 @@
 # DDDMR BEGINNER GUIDE
 
+[繁體中文](https://github.com/dfl-rlab/dddmr_navigation/blob/rr_guide/src/dddmr_beginner_guide/README.zh-Hant.md) | [简体中文](https://github.com/dfl-rlab/dddmr_navigation/blob/rr_guide/src/dddmr_beginner_guide/README.zh-Hans.md)
+
 This README is a beginner's guide to the DDDMR Navigation Stack. With both a gazebo quadruped robot example and a real robot guide, it's designed to help you get up and running fast, explore, and have fun along the way.
 
 ## Table of Contents
