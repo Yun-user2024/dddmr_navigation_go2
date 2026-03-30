@@ -6,8 +6,8 @@ This README is a beginner's guide to the DDDMR Navigation Stack. With both a gaz
 
 | # | Section | Description |
 |:-:|:--------|:------------|
-| 1 | [DDDMR Navigation with Gazebo]| Simulation demo with quadruped robot |
-| 2 | [DDDMR Navigation with a Real Robot]| Deploy on your real robot (wheeled robot, quadruped, humanoid, and more) |
+| 1 | [DDDMR Navigation with Gazebo](#-dddmr-navigation-with-gazebo) | Simulation demo with quadruped robot |
+| 2 | [DDDMR Navigation with a Real Robot](#-start-dddmr-navigation-with-a-real-robot) | Deploy on your real robot (wheeled robot, quadruped, humanoid, and more) |
 
 ## 🖥️ Software Requirements
 - **Ubuntu 22.04** (tested in 22.04, should support 24.04)
