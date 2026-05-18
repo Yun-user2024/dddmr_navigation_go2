@@ -5,7 +5,7 @@ This repo is the finite state machine for [dddmr_navigation](https://github.com/
 We now support variant mobile kinematics models, we are working on unifying all kinds of mobile robots to run on [dddmr_navigation](https://github.com/dfl-rlab/dddmr_navigation).
 [Different Drive]
 
-[Omni Direction]
+[Omni Direction](https://github.com/dfl-rlab/dddmr_navigation/blob/main/src/dddmr_p2p_move_base/kinematics_md/OMNIDIRECTION.md)
 
 [Ackermann Steering]
 
