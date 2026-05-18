@@ -297,6 +297,8 @@ bool P2PMoveBase::executeCycle(const std::shared_ptr<rclcpp_action::ServerGoalHa
           STATE_->setDecision("d_planning");
         }
         else{
+          RCLCPP_DEBUG(this->get_logger(), "Found a plan with its final position: (%.2f, %.2f, %.2f)", 
+              plan.back().pose.position.x, plan.back().pose.position.y, plan.back().pose.position.z);
           STATE_->last_valid_plan_ = clock_->now();
           LP_->setPlan(plan);
           STATE_->setDecision("d_align_heading");  

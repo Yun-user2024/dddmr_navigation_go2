@@ -8,7 +8,7 @@
   </node>
 
   <!--name argument is not required, because it will overwrite all node name in the exec-->
-  <node pkg="global_planner" exec="global_planner_node" output="screen" respawn="false">
+  <node pkg="global_planner" exec="global_planner_node" output="screen" respawn="false" launch-prefix="xterm -e gdb --args">
     <param from="$(find-pkg-share p2p_move_base)/config/zinger_localization.yaml" />
   </node>
 

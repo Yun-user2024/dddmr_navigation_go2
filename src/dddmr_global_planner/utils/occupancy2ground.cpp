@@ -81,6 +81,7 @@ class Occupancy2Ground : public rclcpp::Node
     double inflation_radius_;
     std::map<std::pair<int, int>, size_t> twoD2oneD_;
     std::vector<std::pair<int, int>> obstacles_;
+    float ground_voxel_size_;
 };
 
 
@@ -102,6 +103,11 @@ Occupancy2Ground::Occupancy2Ground():Node("occupancy2ground"){
   this->get_parameter("inflation_radius", inflation_radius_);
   RCLCPP_INFO(this->get_logger(), "inflation_radius: %.2f" , inflation_radius_);
 
+  this->declare_parameter("ground_voxel_size", rclcpp::ParameterValue(0.1f));
+  this->get_parameter("ground_voxel_size", ground_voxel_size_);
+  RCLCPP_INFO(this->get_logger(), "ground_voxel_size: %.2f" , ground_voxel_size_);
+
+  
   if(!std::filesystem::exists(map_dir_))
   {
     RCLCPP_INFO(this->get_logger(), "File: %s not exist, exit.", map_dir_.c_str());
@@ -173,7 +179,7 @@ void Occupancy2Ground::img2Ground() {
 
   pcl::VoxelGrid<pcl::PointXYZI> sor;
   sor.setInputCloud (pc_ground_);
-  sor.setLeafSize (0.05f, 0.05f, 0.05f);
+  sor.setLeafSize (ground_voxel_size_, ground_voxel_size_, ground_voxel_size_);
   sor.filter (*pc_ground_);
   
   sensor_msgs::msg::PointCloud2 ros_msg_map_ground;
