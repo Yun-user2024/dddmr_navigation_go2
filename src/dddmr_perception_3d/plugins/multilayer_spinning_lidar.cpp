@@ -121,6 +121,10 @@ void MultiLayerSpinningLidar::onInitialize()
   node_->get_parameter(name_ + ".marking_height", marking_height_);
   RCLCPP_INFO(node_->get_logger().get_child(name_), "marking_height: %.2f", marking_height_);
 
+  node_->declare_parameter(name_ + ".marking_minimum_height", rclcpp::ParameterValue(0.05));
+  node_->get_parameter(name_ + ".marking_minimum_height", marking_minimum_height_);
+  RCLCPP_INFO(node_->get_logger().get_child(name_), "marking_minimum_height: %.2f", marking_minimum_height_);
+  
   node_->declare_parameter(name_ + ".perception_window_size", rclcpp::ParameterValue(0.0));
   node_->get_parameter(name_ + ".perception_window_size", perception_window_size_);
   RCLCPP_INFO(node_->get_logger().get_child(name_), "perception_window_size: %.2f", perception_window_size_);
@@ -235,6 +239,7 @@ void MultiLayerSpinningLidar::cbSensor(const sensor_msgs::msg::PointCloud2::Shar
   
   Eigen::Affine3d trans_b2s_af3 = tf2::transformToEigen(trans_b2s_);
   pcl::transformPointCloud(*pcl_msg, *pcl_msg, trans_b2s_af3);
+  pcl_msg->header.frame_id = gbl_utils_->getRobotFrame();
 
   std::vector<int> indices;
   pcl_msg->is_dense = false;
@@ -255,7 +260,7 @@ void MultiLayerSpinningLidar::cbSensor(const sensor_msgs::msg::PointCloud2::Shar
   pass.filter (*pcl_msg);
   pass.setInputCloud (pcl_msg);
   pass.setFilterFieldName ("z");
-  pass.setFilterLimits (0.0, marking_height_);
+  pass.setFilterLimits (marking_minimum_height_, marking_height_);
   pass.filter (*pcl_msg);
 
   pcl::VoxelGrid<pcl::PointXYZ> sor;
@@ -337,6 +342,7 @@ void MultiLayerSpinningLidar::selfMark(){
   pcl_msg_gbl_.reset(new pcl::PointCloud<pcl::PointXYZ>);
   Eigen::Affine3d trans_gbl2b_af3 = tf2::transformToEigen(trans_gbl2b_);
   pcl::transformPointCloud(*pcl_msg_, *pcl_msg_gbl_, trans_gbl2b_af3);
+  pcl_msg_gbl_->header.frame_id = gbl_utils_->getGblFrame();
 
   pcl::search::KdTree<pcl::PointXYZ>::Ptr pc_kdtree (new pcl::search::KdTree<pcl::PointXYZ>);
   pc_kdtree->setInputCloud (pcl_msg_gbl_);

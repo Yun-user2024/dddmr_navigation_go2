@@ -153,6 +153,7 @@ class MultiLayerSpinningLidar: public Sensor{
     double scan_effective_negative_start_, scan_effective_negative_end_;
     double resolution_, height_resolution_;
     double marking_height_;
+    double marking_minimum_height_;
     double perception_window_size_; 
     double segmentation_ignore_ratio_;
     bool pub_gbl_marking_for_visualization_;
