@@ -45,7 +45,7 @@ ImageProjection::ImageProjection(std::string name, Channel<ProjectionOut>& outpu
   _pub_projected_image = this->create_publisher<sensor_msgs::msg::Image>("projected_image", 1);
 
   _sub_laser_cloud = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-        "lslidar_point_cloud", 2,
+        "lslidar_point_cloud", rclcpp::QoS(rclcpp::KeepLast(1)).durability_volatile().best_effort(), 
         std::bind(&ImageProjection::cloudHandler, this, std::placeholders::_1));
 
   _pub_full_info_cloud = this->create_publisher<sensor_msgs::msg::PointCloud2>
@@ -247,6 +247,15 @@ ImageProjection::ImageProjection(std::string name, Channel<ProjectionOut>& outpu
   _full_info_cloud->points.resize(cloud_size);
   
   dsf_patched_ground_.setLeafSize(0.1, 0.1, 0.1);
+  
+  dsf_patched_ground_omp_.setNumberOfThreads(6);
+  dsf_patched_ground_omp_.setLeafSize (0.1, 0.1, 0.1);
+  dsf_patched_ground_omp_.setSaveLeafLayout(false);
+
+  dsf_patched_ground_edge_omp_.setNumberOfThreads(6);
+  dsf_patched_ground_edge_omp_.setLeafSize (0.1, 0.1, 0.1);
+  dsf_patched_ground_edge_omp_.setSaveLeafLayout(false);
+
   yolo_labelled_point_cloud_.reset(new pcl::PointCloud<PointType>());
 }
 
@@ -913,11 +922,17 @@ void ImageProjection::zPitchRollFeatureRemoval() {
   pcl::removeNaNFromPointCloud(*patched_ground_, *patched_ground_, tmp_indices);
   pcl::removeNaNFromPointCloud(*patched_ground_edge_, *patched_ground_edge_, tmp_indices2);
   
-  dsf_patched_ground_.setInputCloud(patched_ground_);
-  dsf_patched_ground_.filter(*patched_ground_);
-  dsf_patched_ground_.setInputCloud(patched_ground_edge_);
-  dsf_patched_ground_.filter(*patched_ground_edge_); 
+  //dsf_patched_ground_.setInputCloud(patched_ground_);
+  //dsf_patched_ground_.filter(*patched_ground_);
+  dsf_patched_ground_omp_.setInputCloud(patched_ground_);
+  dsf_patched_ground_omp_.setFinalFilter(true);
+  dsf_patched_ground_omp_.filter(*patched_ground_);
 
+  //dsf_patched_ground_.setInputCloud(patched_ground_edge_);
+  //dsf_patched_ground_.filter(*patched_ground_edge_); 
+  dsf_patched_ground_edge_omp_.setInputCloud(patched_ground_edge_);
+  dsf_patched_ground_edge_omp_.setFinalFilter(true);
+  dsf_patched_ground_edge_omp_.filter(*patched_ground_edge_); 
 }
 
 void ImageProjection::cloudSegmentation() {
@@ -1077,7 +1092,7 @@ void ImageProjection::publishClouds() {
     if (true) {
       pcl::toROSMsg(*cloud, laserCloudTemp);
       laserCloudTemp.header = cloudHeader;
-      laserCloudTemp.header.stamp = clock_->now();
+      laserCloudTemp.header.stamp = _seg_msg.header.stamp;
       pub->publish(laserCloudTemp);
     }
   };

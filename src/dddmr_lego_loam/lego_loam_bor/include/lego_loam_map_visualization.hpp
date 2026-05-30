@@ -7,6 +7,9 @@
 //optimized pcl transform
 #include "transforms.hpp"
 
+// omp voxel
+#include "dddmr_pcl/voxel_omp/voxel_grid_omp.h"
+
 class LegoLoamVisualization : public rclcpp::Node
 {
 public:
@@ -49,7 +52,8 @@ private:
   std::vector<bool> ground_edge_processed_;
   int ground_edge_threshold_num_;
 
-  pcl::VoxelGrid<PointType> downSizeFilterGlobalGroundKeyFrames_Copy;  // for global map visualization
+  pcl::VoxelGridOMP downSizeFilterGlobalGroundKeyFrames_Copy_omp;  // for global map visualization
+  pcl::VoxelGridOMP ds_patched_ground_omp_;
 
 };
 

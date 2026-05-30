@@ -187,6 +187,8 @@ class MultiLayerSpinningLidar: public Sensor{
 
     //@ list of pointcloud sticher for non-repetitive scan lidar
     std::list<pcl::PointCloud<pcl::PointXYZ>> pcl_stitcher_;
+
+    std_msgs::msg::Header last_sensor_receiving_time_;
 };
 
 }//end of name space
