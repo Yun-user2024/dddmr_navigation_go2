@@ -48,9 +48,6 @@
 // pub map 2 camera_init
 #include "tf2_ros/static_transform_broadcaster.h"
 
-// omp voxel
-#include "dddmr_pcl/voxel_omp/voxel_grid_omp.h"
-
 using namespace std::placeholders;
 
 // chrono_literals handles user-defined time durations (e.g. 500ms)
@@ -105,7 +102,11 @@ public:
 
   // move following to public for interactive pose graph editor
   std::vector<pcl::PointCloud<PointType>::Ptr> cornerCloudKeyFrames;
+  std::vector<pcl::PointCloud<PointType>::Ptr>
+      cornerCloudKeyFramesVisualization;
   std::vector<pcl::PointCloud<PointType>::Ptr> patchedGroundKeyFrames;
+  std::vector<pcl::PointCloud<PointType>::Ptr>
+      patchedGroundKeyFramesVisualization;
   std::vector<pcl::PointCloud<PointType>::Ptr> patchedGroundEdgeKeyFrames;
 
   pcl::PointCloud<PointType>::Ptr cloudKeyPoses3D;
@@ -286,22 +287,18 @@ private:
   pcl::VoxelGrid<PointType> downSizeFilterCorner;
   pcl::VoxelGrid<PointType> downSizeFilterSurf;
   pcl::VoxelGrid<PointType> downSizeFilterOutlier;
-
-  pcl::VoxelGridOMP downSizeFilterCorner_omp;
-  pcl::VoxelGridOMP downSizeFilterSurf_omp;
-  pcl::VoxelGridOMP downSizeFilterOutlier_omp;
-  pcl::VoxelGridOMP downSizeFilterSurfTotal_omp;
-  pcl::VoxelGridOMP downSizeFilterCornerKeyFrame_omp;
-  pcl::VoxelGridOMP downSizeFilterSurfKeyFrame_omp;
-
-  pcl::VoxelGrid<PointType> downSizeFilterHistoryKeyFrames;
-
-  pcl::VoxelGridOMP downSizeFilterHistoryKeyFrames_omp;
-
-
+  pcl::VoxelGrid<PointType>
+      downSizeFilterHistoryKeyFrames; // for histor key frames of loop closure
+                                      // scan-to-map optimization
+  pcl::VoxelGrid<PointType>
+      downSizeFilterGlobalMapKeyPoses; // for global map visualization
+  pcl::VoxelGrid<PointType>
+      downSizeFilterGlobalMapKeyFrames; // for global map visualization
+  pcl::VoxelGrid<PointType>
+      downSizeFilterGlobalGroundKeyFrames_Copy; // for global map visualization
+  pcl::VoxelGrid<PointType>
+      downSizeFilterGlobalGroundKeyFrames; // for global map visualization
   pcl::VoxelGrid<PointType> downSizeFilterFinalStitch; // DS for final stitch
-
-
 
   std_msgs::msg::Header timeLaserOdometry_header_;
   double timeLaserOdometry;

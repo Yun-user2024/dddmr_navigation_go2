@@ -24,9 +24,6 @@
 
 #include <filesystem>
 
-// omp voxel
-#include "dddmr_pcl/voxel_omp/voxel_grid_omp.h"
-
 #ifdef TRT_ENABLED
 #include "dddmr_trt/yolov8.h"
 #include <opencv2/cudaimgproc.hpp>
@@ -79,8 +76,6 @@ class ImageProjection : public rclcpp::Node
     pcl::PointCloud<PointType>::Ptr yolo_labelled_point_cloud_;
 
     pcl::VoxelGrid<PointType> dsf_patched_ground_;
-    pcl::VoxelGridOMP dsf_patched_ground_omp_;
-    pcl::VoxelGridOMP dsf_patched_ground_edge_omp_;
 
     int _vertical_scans;
     int _horizontal_scans;
@@ -92,7 +87,7 @@ class ImageProjection : public rclcpp::Node
     int _segment_valid_point_num;
     int _segment_valid_line_num;
     std::string odom_type_;
-    std::string base_ground_frame_, sensor_frame_;
+    std::string baselink_frame_, sensor_frame_;
 
     Channel<ProjectionOut>& _output_channel;
 
@@ -106,6 +101,8 @@ class ImageProjection : public rclcpp::Node
     rclcpp::Publisher<cloud_msgs::msg::CloudInfo>::SharedPtr _pub_segmented_cloud_info;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr _pub_outlier_cloud;
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr _pub_projected_image;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr _pub_ground_fov_filtered_cloud;
+    pcl::PointCloud<PointType>::Ptr _ground_fov_filtered_cloud;
     
     cloud_msgs::msg::CloudInfo _seg_msg;
 
@@ -161,9 +158,6 @@ class ImageProjection : public rclcpp::Node
     double ignore_positive_stop_;
     double ignore_negative_start_;
     double ignore_negative_stop_;
-
-    bool use_sensor_height_to_filter_out_ground_;
-    
 #ifdef TRT_ENABLED
     std::shared_ptr<YoloV8> yolov8_;
 #endif

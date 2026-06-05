@@ -45,7 +45,7 @@ ImageProjection::ImageProjection(std::string name, Channel<ProjectionOut>& outpu
   _pub_projected_image = this->create_publisher<sensor_msgs::msg::Image>("projected_image", 1);
 
   _sub_laser_cloud = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-        "lslidar_point_cloud", rclcpp::QoS(rclcpp::KeepLast(1)).durability_volatile().best_effort(), 
+        "lslidar_point_cloud", 2,
         std::bind(&ImageProjection::cloudHandler, this, std::placeholders::_1));
 
   _pub_full_info_cloud = this->create_publisher<sensor_msgs::msg::PointCloud2>
@@ -67,6 +67,7 @@ ImageProjection::ImageProjection(std::string name, Channel<ProjectionOut>& outpu
       ("outlier_cloud", 1); 
   
   pub_annotated_img_ = this->create_publisher<sensor_msgs::msg::Image>("annotated_image", 1);
+  _pub_ground_fov_filtered_cloud = this->create_publisher<sensor_msgs::msg::PointCloud2>("ground_fov_filtered_cloud", 1);
   
   declare_parameter("laser.num_vertical_scans", rclcpp::ParameterValue(0));
   this->get_parameter("laser.num_vertical_scans", _vertical_scans);
@@ -110,9 +111,9 @@ ImageProjection::ImageProjection(std::string name, Channel<ProjectionOut>& outpu
   this->get_parameter("laser.odom_type", odom_type_);
   RCLCPP_INFO(this->get_logger(), "laser.odom_type: %s", odom_type_.c_str());
   
-  declare_parameter("laser.base_ground_frame", rclcpp::ParameterValue("base_link"));
-  this->get_parameter("laser.base_ground_frame", base_ground_frame_);
-  RCLCPP_INFO(this->get_logger(), "laser.base_ground_frame: %s", base_ground_frame_.c_str());
+  declare_parameter("laser.baselink_frame", rclcpp::ParameterValue(""));
+  this->get_parameter("laser.baselink_frame", baselink_frame_);
+  RCLCPP_INFO(this->get_logger(), "laser.baselink_frame: %s", baselink_frame_.c_str());
   
   declare_parameter("imageProjection.maximum_detection_range", rclcpp::ParameterValue(0.0));
   this->get_parameter("imageProjection.maximum_detection_range", _maximum_detection_range);
@@ -196,10 +197,6 @@ ImageProjection::ImageProjection(std::string name, Channel<ProjectionOut>& outpu
   this->get_parameter("imageProjection.ground_dz_tolerance", ground_dz_tolerance_);
   RCLCPP_INFO(this->get_logger(), "imageProjection.ground_dz_tolerance: %.6f", ground_dz_tolerance_);
 
-  declare_parameter("imageProjection.use_sensor_height_to_filter_out_ground", rclcpp::ParameterValue(false));
-  this->get_parameter("imageProjection.use_sensor_height_to_filter_out_ground", use_sensor_height_to_filter_out_ground_);
-  RCLCPP_INFO(this->get_logger(), "imageProjection.use_sensor_height_to_filter_out_ground: %d", use_sensor_height_to_filter_out_ground_);
-
   declare_parameter("imageProjection.patch_first_ring_to_baselink", rclcpp::ParameterValue(true));
   this->get_parameter("imageProjection.patch_first_ring_to_baselink", patch_first_ring_to_baselink_);
   RCLCPP_INFO(this->get_logger(), "imageProjection.patch_first_ring_to_baselink: %d", patch_first_ring_to_baselink_);
@@ -242,20 +239,12 @@ ImageProjection::ImageProjection(std::string name, Channel<ProjectionOut>& outpu
   _outlier_cloud.reset(new pcl::PointCloud<PointType>());
   patched_ground_.reset(new pcl::PointCloud<PointType>());
   patched_ground_edge_.reset(new pcl::PointCloud<PointType>());
+  _ground_fov_filtered_cloud.reset(new pcl::PointCloud<PointType>());
 
   _full_cloud->points.resize(cloud_size);
   _full_info_cloud->points.resize(cloud_size);
   
   dsf_patched_ground_.setLeafSize(0.1, 0.1, 0.1);
-  
-  dsf_patched_ground_omp_.setNumberOfThreads(6);
-  dsf_patched_ground_omp_.setLeafSize (0.1, 0.1, 0.1);
-  dsf_patched_ground_omp_.setSaveLeafLayout(false);
-
-  dsf_patched_ground_edge_omp_.setNumberOfThreads(6);
-  dsf_patched_ground_edge_omp_.setLeafSize (0.1, 0.1, 0.1);
-  dsf_patched_ground_edge_omp_.setSaveLeafLayout(false);
-
   yolo_labelled_point_cloud_.reset(new pcl::PointCloud<PointType>());
 }
 
@@ -271,6 +260,7 @@ void ImageProjection::resetParameters() {
   _segmented_cloud->clear();
   _segmented_cloud_pure->clear();
   _outlier_cloud->clear();
+  _ground_fov_filtered_cloud->clear();
 
   _range_mat.resize(_vertical_scans, _horizontal_scans);
   _ground_mat.resize(_vertical_scans, _horizontal_scans);
@@ -314,7 +304,7 @@ bool ImageProjection::allEssentialTFReady(std::string sensor_frame){
     try
     {
       trans_b2s_ = tf2Buffer_->lookupTransform(
-          base_ground_frame_, sensor_frame_, tf2::TimePointZero);
+          baselink_frame_, sensor_frame_, tf2::TimePointZero);
       
       tf2_trans_b2s_.setRotation(tf2::Quaternion(trans_b2s_.transform.rotation.x, trans_b2s_.transform.rotation.y, trans_b2s_.transform.rotation.z, trans_b2s_.transform.rotation.w));
       tf2_trans_b2s_.setOrigin(tf2::Vector3(trans_b2s_.transform.translation.x, trans_b2s_.transform.translation.y, trans_b2s_.transform.translation.z));
@@ -714,6 +704,12 @@ void ImageProjection::zPitchRollFeatureRemoval() {
       if(current_i_angle>=ground_fov_bottom_ && current_i_angle<=ground_fov_top_ &&
          current_iplus1_angle>=ground_fov_bottom_ && current_iplus1_angle<=ground_fov_top_){
 
+        //@ collect points within vertical ground FOV (for visualization)
+        if(std::isfinite(_full_cloud->points[lowerInd].x) && std::isfinite(_full_cloud->points[upperInd].x)){
+          _ground_fov_filtered_cloud->push_back(_full_cloud->points[lowerInd]);
+          _ground_fov_filtered_cloud->push_back(_full_cloud->points[upperInd]);
+        }
+
         if(current_j_angle>=0){
           if(current_j_angle>=ground_positive_start_ && current_j_angle<=ground_positive_stop_){
             in_ground_fov = true;
@@ -826,17 +822,6 @@ void ImageProjection::zPitchRollFeatureRemoval() {
           continue;
         }
 
-        //@ filter by z from ground to sensor, this is only useful when in a flat environment.
-        if(use_sensor_height_to_filter_out_ground_){
-          if(trans_b2s_.transform.translation.z+lowerInd_left_pt_no_pitch.z>0.1 || 
-            trans_b2s_.transform.translation.z+lowerInd_right_pt_no_pitch.z>0.1 || 
-            trans_b2s_.transform.translation.z+lowerInd_pt_no_pitch.z>0.1 ){
-            do_patch = false;
-            continue;
-          }
-        }
-
-
         if(i<closest_ring_edge) //we dont casting the last one
           closest_ring_edge = i;
 
@@ -922,17 +907,11 @@ void ImageProjection::zPitchRollFeatureRemoval() {
   pcl::removeNaNFromPointCloud(*patched_ground_, *patched_ground_, tmp_indices);
   pcl::removeNaNFromPointCloud(*patched_ground_edge_, *patched_ground_edge_, tmp_indices2);
   
-  //dsf_patched_ground_.setInputCloud(patched_ground_);
-  //dsf_patched_ground_.filter(*patched_ground_);
-  dsf_patched_ground_omp_.setInputCloud(patched_ground_);
-  dsf_patched_ground_omp_.setFinalFilter(true);
-  dsf_patched_ground_omp_.filter(*patched_ground_);
+  dsf_patched_ground_.setInputCloud(patched_ground_);
+  dsf_patched_ground_.filter(*patched_ground_);
+  dsf_patched_ground_.setInputCloud(patched_ground_edge_);
+  dsf_patched_ground_.filter(*patched_ground_edge_); 
 
-  //dsf_patched_ground_.setInputCloud(patched_ground_edge_);
-  //dsf_patched_ground_.filter(*patched_ground_edge_); 
-  dsf_patched_ground_edge_omp_.setInputCloud(patched_ground_edge_);
-  dsf_patched_ground_edge_omp_.setFinalFilter(true);
-  dsf_patched_ground_edge_omp_.filter(*patched_ground_edge_); 
 }
 
 void ImageProjection::cloudSegmentation() {
@@ -1092,7 +1071,7 @@ void ImageProjection::publishClouds() {
     if (true) {
       pcl::toROSMsg(*cloud, laserCloudTemp);
       laserCloudTemp.header = cloudHeader;
-      laserCloudTemp.header.stamp = _seg_msg.header.stamp;
+      laserCloudTemp.header.stamp = clock_->now();
       pub->publish(laserCloudTemp);
     }
   };
@@ -1101,6 +1080,7 @@ void ImageProjection::publishClouds() {
   //PublishCloud(_pub_segmented_cloud, _segmented_cloud);
   PublishCloud(_pub_ground_cloud, patched_ground_);
   PublishCloud(_pub_segmented_cloud_pure, _segmented_cloud_pure);
+  PublishCloud(_pub_ground_fov_filtered_cloud, _ground_fov_filtered_cloud);
   //PublishCloud(_pub_full_info_cloud, _full_info_cloud);
   if (_pub_segmented_cloud_info->get_subscription_count() != 0) {
     _pub_segmented_cloud_info->publish(_seg_msg);

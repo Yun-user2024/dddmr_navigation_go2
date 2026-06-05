@@ -14,7 +14,7 @@ RUN apt-get install -y ros-humble-velodyne-description
 WORKDIR /
 RUN mkdir -p ws_gz/src && \
     cd ws_gz/src && \
-    git clone https://github.com/dfl-rlab/gz_quadbot.git
+    git clone https://githubfast.com/dfl-rlab/gz_quadbot.git
 
 WORKDIR /ws_gz
 
