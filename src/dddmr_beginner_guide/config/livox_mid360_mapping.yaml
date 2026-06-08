@@ -1,0 +1,89 @@
+# ================================================================
+# LeGO-LOAM Livox Mid-360 映射配置文件
+# ================================================================
+
+lego_loam_ip:
+  ros__parameters:
+    use_sim_time: false  # 是否使用仿真时间（false=使用真实时间）
+
+    # ---------- 激光雷达基本参数 ----------
+    laser:
+        odom_type: "wheel_odometry"  # 里程计类型：激光里程计
+        baselink_frame: "base_link"  # 机器人基坐标系名称
+
+        num_vertical_scans: 100   # 垂直扫描线数，用于将点云分环
+        num_horizontal_scans: 400  # 水平方向分辨率（每个扫描周期点数）
+        vertical_angle_bottom: -7.0  # 最低扫描角度（度）
+        vertical_angle_top: 52.0    # 最高扫描角度（度）
+        scan_period: 0.1           # 扫描周期（秒），对应10Hz
+
+    # ---------- 图像投影（地面分割 & 点云预处理） ----------
+    imageProjection:
+        # --- Segment 分割参数 ---
+        segment_valid_point_num: 4     # 每个 segment 至少需要的有效点数
+        segment_valid_line_num: 1      # 每个 segment 至少跨越的扫描线数
+        segment_theta: 60.0            # 相邻点间角度阈值（度），超过则分段
+        minimum_detection_range: 0.5    # 最小检测距离（米），过滤过近噪点
+        maximum_detection_range: 30.0   # 最大检测距离（米），过滤过远噪点
+        distance_for_patch_between_rings: 1.0  # 相邻扫描环间的 patch 搜索距离
+
+        # --- Stitcher 参数 ---
+        stitcher_num: 3   # 环内 stitching 数量，用于平滑拼接
+        trt_model_path: ""  # TensorRT 模型路径（空=不使用深度学习分割）
+        projected_image_stack_size: 1  # 投影图像堆叠帧数
+        patch_first_ring_to_baselink: false  # 首个扫描环是否投影到 baselink
+
+        # --- 地面分割参数 ---
+        ground_slope_tolerance: 0.25  # 地面坡度容差（弧度），约14.3度
+
+        # --- 地面 FOV（视场角）过滤 ---
+        # 通过限制地面检测的角度范围来减少误检
+        # ground_fov_bottom: 0.0
+        # ground_fov_top: 0.523599
+        ground_fov_bottom: -0.0873   # 地面 FOV 下界
+        ground_fov_top:  0.523599    # 地面 FOV 上界
+        ground_positive_start: 0.0         # 正向地面角度起始（弧度）
+        ground_positive_stop: 0.78539815     # 正向地面角度终止（弧度）
+        ground_negative_start: 0.0         # 负向地面角度起始（弧度）
+        ground_negative_stop: -0.78539815    # 负向地面角度终止（弧度）
+
+# ================================================================
+# LeGO-LOAM 特征关联节点
+# ================================================================
+lego_loam_fa:
+  ros__parameters:
+    use_sim_time: false  # 是否使用仿真时间
+
+    featureAssociation:
+        edge_threshold: 0.5    # 边缘（角点）特征阈值，距离变化 > 此值认为是边缘点
+        surf_threshold: 0.5    # 平面特征阈值，距离变化 > 此值认为是平面点
+        nearest_feature_search_distance: 10.0  # 最近特征搜索距离（米）
+
+    mapping:
+        to_map_optimization: true  # 是否将当前帧优化到全局地图
+
+# ================================================================
+# LeGO-LOAM 地图优化节点
+# ================================================================
+lego_loam_mo:
+  ros__parameters:
+    use_sim_time: false  # 是否使用仿真时间
+
+    mapping:
+        # --- 关键帧触发条件 ---
+        # 平移或旋转超过阈值时，将当前帧添加为关键帧
+        distance_between_key_frame: 1.5   # 平移阈值（米），超过则添加关键帧
+        angle_between_key_frame: 2.0       # 旋转阈值（度），超过则添加关键帧
+
+        # --- 回环检测 ---
+        enable_loop_closure: true   # 是否启用回环检测
+
+        surrounding_keyframe_search_num: 20   # 搜索周围关键帧的数量
+        history_keyframe_search_radius: 12.0   # 历史关键帧搜索半径（米）
+        history_keyframe_search_num: 5         # 历史关键帧搜索数量
+        history_keyframe_fitness_score: 0.2    # ICP 匹配适应度得分阈值，越小越严格
+
+        # --- 地面体素过滤 ---
+        # 使用体素网格滤波器对地面点云降采样，减少计算量
+        ground_voxel_size: 0.3           # 地面点云体素网格大小（米）
+        ground_edge_threshold_num: 50     # 地面边缘处点数量阈值

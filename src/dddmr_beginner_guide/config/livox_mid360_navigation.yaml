@@ -1,0 +1,412 @@
+# =============================================================
+# dddmr_navigation livox_mid360 导航配置 —— 全注释版
+# 节点层级: P2P移动基座 → MCL 3D定位 → 全局规划 → 局部规划 → 感知 → 轨迹生成
+# =============================================================
+
+p2p_move_base:                      # P2P 导航主控制器 —— 协调全局规划、局部控制、恢复行为
+  ros__parameters:
+    controller_frequency: 10.0      # 控制器循环频率（Hz），10Hz = 每100ms计算一次控制指令
+    planner_patience: 10.0           # 全局规划器无响应时等待时间（秒），超时触发恢复行为
+    oscillation_distance: 5.0        # 振荡检测距离（米），机器人移动超过5m仍未接近目标认为振荡
+    oscillation_angle: 1.0          # 振荡检测角度阈值（弧度≈57°），来回转向超过此角度认为振荡
+    oscillation_patience: 15.0       # 振荡容忍时间（秒），持续振荡15秒后触发恢复
+    controller_patience: 10.0       # 局部控制器无响应时等待时间（秒）
+    no_plan_retry_num: 10           # 全局路径规划失败重试次数上限
+    waiting_patience: 10.0          # 到达目标后等待确认时间（秒）
+
+global_plan_manager:                 # 全局路径管理器 —— 管理全局规划请求
+  ros__parameters:
+    global_planner_action_name: "get_dwa_plan"    # 全局规划Action服务名
+    global_planner_query_frequency: 5.0            # 全局路径查询频率（Hz）
+
+# =============================================================
+# MCL 3DL —— 3D 蒙特卡洛定位（粒子滤波）
+# =============================================================
+mcl_ip:                              # MCL ImageProjection 节点 —— 点云预处理（与建图一致）
+  ros__parameters:
+    laser:
+      odom_type: "wheel_odometry"  # 里程计类型：laser_odometry（激光里程计）或 wheel_odometry
+      baselink_frame: "base_link"
+      num_vertical_scans: 100      # 垂直扫描线数（等效32线）
+      num_horizontal_scans: 400   # 水平分辨率
+      vertical_angle_bottom: -7.0  # 垂直FOV下界（度）
+      vertical_angle_top: 52.0     # 垂直FOV上界（度）
+      scan_period: 0.1            # 扫描周期（秒）
+    imageProjection:
+      segment_valid_point_num: 5   # 分割有效点数阈值
+      segment_valid_line_num: 2    # 分割有效线数阈值
+      segment_theta: 60.0          # 相邻扫描线角度阈值（度）
+      minimum_detection_range: 0.5 # 最小检测距离（米）
+      maximum_detection_range: 30.0 # 最大检测距离（米）
+      distance_for_patch_between_rings: 1.0  # 相邻环拼接距离阈值（米）
+      stitcher_num: 4             # 非重复扫描拼接帧数（Livox Mid360用2~4）
+      trt_model_path: ""          # TRT深度学习分割模型路径（空=不用）
+      projected_image_stack_size: 1
+      patch_first_ring_to_baselink: false
+      ground_slope_tolerance: 0.25 # 地面坡度容忍度（弧度≈14.3°）
+      # 地面FOV配置（0°=水平面，0.5236rad≈30°）
+      ground_fov_bottom: -0.4236
+      ground_fov_top: 0.122
+      ground_positive_start: 0.0
+      ground_positive_stop: 3.1415926
+      ground_negative_start: 0.0
+      ground_negative_stop: -3.1415926
+
+mcl_fa:                              # MCL FeatureAssociation 节点 —— 特征提取与匹配
+  ros__parameters:
+    featureAssociation:
+      edge_threshold: 0.1          # 边缘（角点）曲率阈值
+      surf_threshold: 0.1          # 平面特征曲率阈值
+      nearest_feature_search_distance: 3.0 # 特征搜索最大距离（米）
+
+sub_maps:                            # 子图管理器 —— 管理分块地图
+  ros__parameters:
+    pose_graph_dir: "/root/dddmr_bags/bags"  # 轨迹图目录（建图输出的pose_graph）
+    sub_map_search_radius: 50.0      # 子图搜索半径（米）
+    sub_map_warmup_trigger_distance: 20.0  # 预热触发距离（米），移动20m后开始加载子图
+    complete_map_voxel_size: 0.4     # 完整地图体素降采样大小（米）
+
+mcl_3dl:                             # MCL 3DL 粒子滤波主节点 —— 融合激光里程计做全局定位
+  ros__parameters:
+    # 初始位姿（手动设置或外部给定）
+    init_x: 0.0           # 初始x（米）
+    init_y: 0.0           # 初始y（米）
+    init_z: 0.0           # 初始z（米）
+    init_roll: 0.0        # 初始roll（弧度）
+    init_pitch: 0.0       # 初始pitch（弧度）
+    init_yaw: 0.0         # 初始yaw（弧度）
+    # 初始位姿不确定性（方差，越大粒子分布越广）
+    init_var_x: 2.0       # x方向方差
+    init_var_y: 2.0       # y方向方差
+    init_var_z: 0.5       # z方向方差
+    init_var_roll: 0.1    # roll方差
+    init_var_pitch: 0.1   # pitch方差
+    init_var_yaw: 0.5     # yaw方差
+
+    # TF坐标系配置
+    map_frame: "map"      # 地图坐标系
+    robot_frame: "base_link"  # 机器人坐标系
+    odom_frame: "odom"    # 里程计坐标系
+    # 地图下采样（降低点云密度，减少计算量）
+    map_downsample_x: 0.1  # 体素大小x（米）
+    map_downsample_y: 0.1  # 体素大小y（米）
+    map_downsample_z: 0.1  # 体素大小z（米）
+    map_update_interval_sec: 2       # 地图更新间隔（秒）
+    num_particles: 60               # 粒子数量，越多越精确但计算量大
+
+    # 重采样扰动方差（重采样后添加随机扰动防止粒子退化）
+    resample_var_x: 0.2   # x方向扰动方差
+    resample_var_y: 0.2   # y方向扰动方差
+    resample_var_z: 0.2   # z方向扰动方差
+    resample_var_yaw: 0.1   # yaw扰动方差
+    resample_var_pitch: 0.2   # pitch扰动方差
+    resample_var_roll: 0.2    # roll扰动方差
+
+    # 粒子扩散方差（长期未更新时扩大搜索范围）
+    expansion_var_x: 0.5   # x方向扩散方差
+    expansion_var_y: 0.5   # y方向扩散方差
+    expansion_var_z: 0.5   # z方向扩散方差
+    expansion_var_yaw: 0.2   # yaw扩散方差
+    expansion_var_pitch: 0.2   # pitch扩散方差
+    expansion_var_roll: 0.2    # roll扩散方差
+
+    match_ratio_thresh: 0.0         # 匹配率阈值（0=不限制）
+    euc_cluster_distance: 0.8       # 欧式聚类距离（米）
+    euc_cluster_min_size: 3         # 聚类最小点数
+    euc_cluster_max_size: 2400       # 聚类最大点数
+
+    knn_num_of_ground_normals: 20   # K近邻搜索数量（地面法向量计算）
+
+    # 定位更新触发条件
+    update_min_d: 0.1               # 平移超过0.1米触发更新
+    update_min_a: 0.1               # 旋转超过0.1弧度触发更新
+
+    # 里程计噪声模型参数（协方差矩阵）
+    odom_err_lin_lin: 0.6            # 线性-线性噪声（纯平移）
+    odom_err_lin_ang: 0.3            # 线性-角噪声（平移时伴随旋转漂移）
+    odom_err_ang_lin: 0.3            # 角-线性噪声（旋转时伴随平移漂移）
+    odom_err_ang_ang: 0.6            # 角-角噪声（纯旋转）
+    odom_err_integ_lin_tc: 5.0      # 线性噪声积分时间常数（秒）
+    odom_err_integ_ang_tc: 10.0      # 角噪声积分时间常数（秒）
+
+    lpf_step: 2.0                   # 低通滤波步长
+    acc_lpf_step: 128.0             # 加速度低通滤波步长
+
+    # 里程计跳跃检测（防异常值）
+    jump_dist: 1.0                  # 位置跳变阈值（米），超过视为异常
+    jump_ang: 1.57                  # 角度跳变阈值（弧度≈90°）
+
+    # 偏差方差
+    bias_var_dist: 2.0              # 距离偏差方差
+    bias_var_ang: 1.57              # 角度偏差方差（弧度）
+
+    tf_tolerance: 0.1               # TF变换容差（秒）
+    publish_tf: true                 # 是否发布 map→odom 的TF（开启才能用于导航）
+
+    # 似然场模型（用于粒子权重计算）
+    likelihood:
+      num_points_global: 8          # 全局似然场采样点数
+      match_dist_min: 0.3           # 匹配最小距离阈值（米）
+      match_dist_flat: 0.05         # 平面匹配距离阈值（米）
+      threshold_for_trusted_ground: 6  # 信任地面的最小点数
+      radius_of_ground_search: 1.0   # 地面搜索半径（米）
+
+# =============================================================
+# 局部规划器 —— MPC轨迹优化
+# =============================================================
+local_planner:                       # MPC局部规划器
+  ros__parameters:
+    odom_topic: odom                # 里程计话题
+    forward_prune: 3.0              # 前向裁剪距离（米），截取前方3m路径
+    backward_prune: 1.0             # 后向裁剪距离（米）
+    heading_tracking_distance: 0.5   # 航向跟踪前视距离（米）
+    heading_align_angle: 0.5         # 航向对齐角度阈值（弧度）
+    prune_plane_timeout: 3.0         # 平面裁剪超时时间（秒）
+    xy_goal_tolerance: 0.3          # 目标xy位置容差（米）
+    yaw_goal_tolerance: 0.3          # 目标朝向容差（弧度）
+    controller_frequency: 10.0       # 控制频率（Hz）
+
+    # 机器人几何模型（长方体包围盒）
+    cuboid:                          # 8个顶点定义机器人外形
+      flb: [0.42, 0.36, 0.0]       # front-left-bottom 前左下
+      frb: [0.42, -0.36, 0.0]      # front-right-bottom 前右下
+      flt: [0.42, 0.36, 0.6]       # front-left-top 前左上
+      frt: [0.42, -0.36, 0.6]      # front-right-top 前右上
+      blb: [-0.35, 0.36, 0.0]      # back-left-bottom 后左下
+      brb: [-0.35, -0.36, 0.0]     # back-right-bottom 后右下
+      blt: [-0.35, 0.36, 0.6]      # back-left-top 后左上
+      brt: [-0.35, -0.36, 0.6]     # back-right-top 后右上
+      # 机器人尺寸: 长(前到后)≈0.77m, 宽(左到右)≈0.72m, 高≈0.6m
+
+recovery_behaviors:                  # 恢复行为（轨迹被全部拒绝时执行）
+  ros__parameters:
+    plugins: ["rotate_inplace"]     # 当前仅启用原地旋转恢复
+    rotate_inplace:
+      plugin: "recovery_behaviors::RotateInPlaceBehavior"
+      frequency: 10.0               # 旋转恢复频率（Hz）
+      tolerance: 0.3                # 恢复成功判断容差（弧度）
+      trajectory_generator_name: "differential_drive_rotate_inplace"  # 使用的轨迹生成器
+
+trajectory_generators:               # 轨迹生成器 —— 采样生成候选轨迹
+  ros__parameters:
+    plugins: ["differential_drive_simple",   # 正常直行+转弯轨迹
+              "differential_drive_rotate_inplace",  # 原地旋转轨迹
+              "differential_drive_rotate_shortest_angle"]  # 最短角度旋转轨迹
+
+    # 原地旋转轨迹（最短角度）
+    differential_drive_rotate_shortest_angle:
+      plugin: "trajectory_generators::DDRotateInplaceTheory"
+      controller_frequency: 10.0
+      rotation_speed: 0.5           # 旋转速度（弧度/秒）
+      cuboid:
+        flb: [0.42, 0.36, 0.0]
+        frb: [0.42, -0.36, 0.0]
+        flt: [0.42, 0.36, 0.6]
+        frt: [0.42, -0.36, 0.6]
+        blb: [-0.35, 0.36, 0.0]
+        brb: [-0.35, -0.36, 0.0]
+        blt: [-0.35, 0.36, 0.6]
+        brt: [-0.35, -0.36, 0.6]
+
+    # 原地旋转轨迹（原地旋转）
+    differential_drive_rotate_inplace:
+      plugin: "trajectory_generators::DDRotateInplaceTheory"
+      controller_frequency: 10.0
+      rotation_speed: 0.5
+      cuboid:
+        flb: [0.42, 0.36, 0.0]
+        frb: [0.42, -0.36, 0.0]
+        flt: [0.42, 0.36, 0.6]
+        frt: [0.42, -0.36, 0.6]
+        blb: [-0.35, 0.36, 0.0]
+        brb: [-0.35, -0.36, 0.0]
+        blt: [-0.35, 0.36, 0.6]
+        brt: [-0.35, -0.36, 0.6]
+
+    # 正常行驶轨迹（DWA采样）
+    differential_drive_simple:
+      plugin: "trajectory_generators::DDSimpleTrajectoryGeneratorTheory"
+      # 速度约束
+      max_vel_x: 1.0               # 最大前向速度（米/秒）
+      min_vel_x: 0.1               # 最小前向速度（米/秒），必须正数
+      max_vel_theta: 0.6           # 最大角速度（弧度/秒）
+      min_vel_theta: 0.15          # 最小角速度（弧度/秒）
+      acc_lim_x: 1.0               # 线加速度限制（米/秒²）
+      acc_lim_theta: 3.0           # 角加速度限制（弧度/秒²）
+      deceleration_ratio: 2.0       # 减速比（减速距离 = 加速度/减速度 * 速度）
+      # 电机约束
+      max_motor_shaft_rpm: 3000.0  # 电机最大转速（转/分）
+      wheel_diameter: 0.16          # 轮径（米）
+      gear_ratio: 1.0              # 减速比（1=无减速）
+      robot_radius: 0.25            # 机器人等效半径（米，用于碰撞检测）
+      # DWA采样参数
+      controller_frequency: 10.0    # 控制频率
+      sim_time: 2.0                # 轨迹模拟时间（秒），模拟未来2秒的轨迹
+      linear_x_sample: 5.0         # 前向速度采样数量
+      angular_z_sample: 10.0        # 角速度采样数量
+      sim_granularity: 0.05        # 轨迹采样精度（米）
+      angular_sim_granularity: 0.025 # 角轨迹采样精度（弧度）
+      cuboid:
+        flb: [0.42, 0.36, 0.0]
+        frb: [0.42, -0.36, 0.0]
+        flt: [0.42, 0.36, 0.6]
+        frt: [0.42, -0.36, 0.6]
+        blb: [-0.35, 0.36, 0.0]
+        brb: [-0.35, -0.36, 0.0]
+        blt: [-0.35, 0.36, 0.6]
+        brt: [-0.35, -0.36, 0.6]
+
+mpc_critics:                         # MPC评价器 —— 对候选轨迹打分
+  ros__parameters:
+    plugins: ["collision", "stick_path", "pure_pursuit",
+              "toward_global_plan", "collision_rotate",
+              "collision_rotate_shortest", "prefer_rotate_shortest"]
+
+    collision:                       # 碰撞检测（直行）
+      plugin: "mpc_critics::CollisionModel"
+      trajectory_generator: differential_drive_simple
+      weight: 1.0                   # 权重（分数越高越重要）
+
+    stick_path:                      # 路径保持（防止偏离全局路径）
+      plugin: "mpc_critics::StickPathModel"
+      trajectory_generator: differential_drive_simple
+      weight: 0.1                   # 权重较低，允许一定偏离
+
+    pure_pursuit:                    # 纯追踪（沿路径跟踪）
+      plugin: "mpc_critics::PurePursuitModel"
+      trajectory_generator: differential_drive_simple
+      translation_weight: 1.0        # 平移权重
+      orientation_weight: 0.01       # 朝向权重（很低，优先平移）
+
+    toward_global_plan:              # 朝向全局路径（转向目标点）
+      plugin: "mpc_critics::TowardGlobalPlanModel"
+      trajectory_generator: differential_drive_simple
+      weight: 1.0
+
+    collision_rotate:                # 碰撞检测（原地旋转）
+      plugin: "mpc_critics::CollisionModel"
+      trajectory_generator: differential_drive_rotate_inplace
+      weight: 1.0
+
+    collision_rotate_shortest:       # 碰撞检测（最短角度旋转）
+      plugin: "mpc_critics::CollisionModel"
+      trajectory_generator: differential_drive_rotate_shortest_angle
+      weight: 1.0
+
+    prefer_rotate_shortest:         # 偏好最短角度旋转
+      plugin: "mpc_critics::ShortestAngleModel"
+      trajectory_generator: differential_drive_rotate_shortest_angle
+      weight: 1.0
+
+# =============================================================
+# 感知层 —— 3D障碍物感知（全局+局部）
+# =============================================================
+perception_3d_local:                 # 局部感知（用于局部规划+碰撞检测）
+  ros__parameters:
+    global_frame: "map"             # 全局坐标系
+    robot_base_frame: "base_link"    # 机器人基准坐标系
+    max_obstacle_distance: 9999.0     # 最大障碍物感知距离（米）
+    inscribed_radius: 0.5            # 内切圆半径（膨胀基础值）
+    inflation_descending_rate: 2.0   # 膨胀递减率（每米膨胀代价增量）
+    inflation_radius: 0.1            # 最大膨胀半径（米）
+    sensors_collected_frequency: 10.0 # 传感器融合频率（Hz）
+
+    plugins: ["map", "path_blocked_strategy","lidar"]  # 感知插件（静态地图+路径阻塞检测）
+
+    # 静态地图层
+    map:
+      plugin: "perception_3d::StaticLayer"
+      is_local_planner: true        # 局部规划模式
+      mapping_mode: false           # 不在建图模式
+      map_topic: "mapcloud"         # 点云地图话题
+      ground_topic: "mapground"     # 地面地图话题
+
+    # 路径阻塞检测
+    path_blocked_strategy:
+      plugin: "perception_3d::PathBlockedStrategy"
+      check_radius: 0.3            # 路径阻塞检测半径（米）
+
+    # 激光雷达动态感知（被注释，未启用）
+    lidar:
+      plugin: "perception_3d::MultiLayerSpinningLidar"
+      is_local_planner: true
+      topic: "segmented_cloud_pure"
+      pub_gbl_marking_for_visualization: false
+      vertical_FOV_top: 15.0
+      vertical_FOV_bottom: -15.0
+      scan_effective_positive_start: 30.0
+      scan_effective_positive_end: 180.0
+      scan_effective_negative_start: -30.0
+      scan_effective_negative_end: -180.0
+      resolution: 0.05              # 栅格分辨率（米）
+      height_resolution: 0.05      # 高度分辨率（米）
+      marking_height: 2.0          # 障碍物标记高度上限（米）
+      perception_window_size: 3.0  # 感知窗口大小（米）
+      segmentation_ignore_ratio: 0.5 # 分割忽略比例
+      expected_sensor_time: 0.2    # 传感器数据预期延迟（秒）
+
+perception_3d_global:                 # 全局感知（用于全局路径规划）
+  ros__parameters:
+    global_frame: "map"
+    robot_base_frame: "base_link"
+    max_obstacle_distance: 9999.0
+    inscribed_radius: 0.5
+    inflation_descending_rate: 2.0
+    inflation_radius: 0.1            # 最大膨胀半径（米）
+    sensors_collected_frequency: 10.0
+
+    plugins: ["map"]                # 仅用静态地图（无实时激光感知）
+
+    dgraph_publish_frequency: 1.0    # 动态图发布频率（Hz）
+
+    # 静态地图层
+    map:
+      plugin: "perception_3d::StaticLayer"
+      is_local_planner: false       # 全局规划模式
+      use_adaptive_connection: false # 关闭自适应连接（使用固定半径搜索）
+      adaptive_connection_number: 20
+      radius_of_ground_connection: 1.5  # 地面节点连接半径（米）
+      intensity_search_radius: 1.0   # 强度搜索半径（米）
+      intensity_search_punish_weight: 0.1  # 孤立节点惩罚权重
+      static_imposing_radius: 1.5   # 地图强制加权半径（米）
+      map_topic: "mapcloud"
+      ground_topic: "mapground"
+      support:
+        mapping_mode: false
+        enable_edge_detection: true  # 开启边缘检测
+        generate_static_graph: false
+
+    # 激光雷达（用于全局可视化，仅发布）
+    lidar:
+      plugin: "perception_3d::MultiLayerSpinningLidar"
+      is_local_planner: false
+      topic: "segmented_cloud_pure"
+      pub_gbl_marking_for_visualization: true  # 发布用于可视化
+      vertical_FOV_top: 15.0
+      vertical_FOV_bottom: -15.0
+      scan_effective_positive_start: 30.0
+      scan_effective_positive_end: 180.0
+      scan_effective_negative_start: -30.0
+      scan_effective_negative_end: -180.0
+      euclidean_cluster_extraction_tolerance: 0.1  # 欧式聚类容差（米）
+      euclidean_cluster_extraction_min_cluster_size: 1
+      xy_resolution: 0.05           # 栅格xy分辨率（米）
+      height_resolution: 0.05       # 栅格高度分辨率（米）
+      marking_height: 2.0           # 标记高度（米）
+      perception_window_size: 5.0    # 全局感知窗口（更大=看更远）
+      segmentation_ignore_ratio: 1.1  # 分割忽略比例（更宽松）
+      expected_sensor_time: 0.1
+
+# =============================================================
+# 全局规划器
+# =============================================================
+global_planner:                      # 3D图搜索全局规划器
+  ros__parameters:
+    turning_weight: 0.1             # 转弯惩罚权重（越大越回避急转弯）
+    enable_detail_log: false        # 详细日志开关
+    a_star_expanding_radius: 0.5    # A*扩展半径（米）
+
+dynamic_window_aware_global_planner: # DWA感知全局规划器
+  ros__parameters:
+    look_ahead_distance: 2.0        # 前视距离（米），规划时向前看多远
+    recompute_frequency: 10.0        # 路径重计算频率（Hz）
