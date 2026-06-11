@@ -4,7 +4,7 @@
 
 lego_loam_ip:
   ros__parameters:
-    use_sim_time: true  # 是否使用仿真时间（false=使用真实时间）
+    use_sim_time: false  # 是否使用仿真时间（false=使用真实时间）
 
     # ---------- 激光雷达基本参数 ----------
     laser:
@@ -12,7 +12,7 @@ lego_loam_ip:
         baselink_frame: "base_link"  # 机器人基坐标系名称
 
         num_vertical_scans: 32   # 垂直扫描线数，用于将点云分环            和导航保持一致
-        num_horizontal_scans: 4000  # 水平方向分辨率（每个扫描周期点数）      和导航保持一致
+        num_horizontal_scans: 1000  # 水平方向分辨率（每个扫描周期点数）      和导航保持一致
         vertical_angle_bottom: -7.0  # 最低扫描角度（度）
         vertical_angle_top: 52.0    # 最高扫描角度（度）
         scan_period: 0.1           # 扫描周期（秒），对应10Hz              和导航保持一致  
@@ -22,13 +22,13 @@ lego_loam_ip:
         # --- Segment 分割参数 ---
         segment_valid_point_num: 5     # 每个 segment 至少需要的有效点数
         segment_valid_line_num: 2      # 每个 segment 至少跨越的扫描线数
-        segment_theta: 40.0            # 相邻点间角度阈值（度），超过则分段
+        segment_theta: 20.0            # 相邻点间角度阈值（度），超过则分段
         minimum_detection_range: 0.2    # 最小检测距离（米），过滤过近噪点
         maximum_detection_range: 30.0   # 最大检测距离（米），过滤过远噪点
         distance_for_patch_between_rings: 1.0  # 相邻扫描环间的 patch 搜索距离
 
         # --- Stitcher 参数 ---
-        stitcher_num: 4   # 环内 stitching 数量，用于平滑拼接
+        stitcher_num: 2   # 环内 stitching 数量，用于平滑拼接
         trt_model_path: ""  # TensorRT 模型路径（空=不使用深度学习分割）
         projected_image_stack_size: 1  # 投影图像堆叠帧数
         patch_first_ring_to_baselink: false  # 首个扫描环是否投影到 baselink
@@ -52,7 +52,7 @@ lego_loam_ip:
 # ================================================================
 lego_loam_fa:
   ros__parameters:
-    use_sim_time: true  # 是否使用仿真时间
+    use_sim_time: false  # 是否使用仿真时间
 
     featureAssociation:
         edge_threshold: 0.5    # 边缘（角点）特征阈值，距离变化 > 此值认为是边缘点
@@ -67,7 +67,7 @@ lego_loam_fa:
 # ================================================================
 lego_loam_mo:
   ros__parameters:
-    use_sim_time: true  # 是否使用仿真时间
+    use_sim_time: false  # 是否使用仿真时间
 
     mapping:
         # --- 关键帧触发条件 ---

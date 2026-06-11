@@ -1,20 +1,15 @@
 <launch>
-
-  <!-- 坐标旋转桥接节点：订阅原始点云 /livox/lidar，旋转后发布到 /lego_loam/input_cloud -->
-  <node pkg="lidar_bridge" exec="lidar_bridge_node" output="screen" respawn="false"/>
-
-  <node pkg="lego_loam_bor" exec="lego_loam_bag" output="screen" respawn="false">
+  <node pkg="lego_loam_bor" exec="lego_loam" output="screen" respawn="false">
     <param from="$(find-pkg-share lego_loam_bor)/config/loam_bag_mid360_config.yaml" />
-    <remap from="lslidar_point_cloud" to="/lego_loam/input_cloud"/>
+    <remap from="/lslidar_point_cloud" to="/livox/lidar"/>
+    <remap from="/odom" to="/odom"/>
   </node>
 
-  <node pkg="rviz2" exec="rviz2" output="screen" respawn="false"
-        args="-d $(find-pkg-share lego_loam_bor)/rviz/lego_loam.rviz">
-  </node>
+  <!-- TF -->
+  <node pkg="tf2_ros" exec="static_transform_publisher" name="baselink2footprint" args="0.0 0 -0.325 0.0 0.0 0 base_link base_footprint" />
+  <node pkg="tf2_ros" exec="static_transform_publisher" name="baselink2mid360" args="0.1 0 0.11 -0.034 0.56395 0 base_link livox_frame" />
 
-  <!-- TF: x y z roll pitch yaw parent child -->
-  <node pkg="tf2_ros" exec="static_transform_publisher"
-        name="sensor2baselink"
-        args="0 0 0 0.0 0.785398 0 base_link livox_frame" />
+  <node pkg="rviz2" exec="rviz2" output="screen" respawn="false" args="-d $(find-pkg-share lego_loam_bor)/rviz/lego_loam.rviz">
+  </node>
 
 </launch>
